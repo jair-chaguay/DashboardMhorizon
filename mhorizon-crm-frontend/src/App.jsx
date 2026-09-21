@@ -1,33 +1,53 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import { useState, useEffect,useCallback,  useMemo } from 'react';
 import { Mail, Eye, MousePointerClick, AlertTriangle, Users, Download } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell 
 } from 'recharts';
+import api from './../api/api'
 
 function App() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchLeads = async () => {
+  const fetchLeads = useCallback(async () => {
     try {
-      const response = await axios.get('http://127.0.0.1:8000/api/leads');
-      setLeads(response.data);
-    } catch (error) {
-      console.error("Error conectando con Laravel:", error);
-    }
-  };
+      setLoading(true);
+      
+      const response = await api.get('/leads'); 
+      console.log("Respuesta de Laravel:", response.data);
+      
+      if (Array.isArray(response.data)) {
+        setLeads(response.data); // Si es un array directo [...]
+      } 
+      else if (response.data && Array.isArray(response.data.data)) {
+        setLeads(response.data.data); // Si Laravel lo envolvió en { data: [...] }
+      } 
+      else {
+        console.error("Laravel no devolvió una lista válida:", response.data);
+        setLeads([]); // Forzamos un array vacío para que React no explote
+      }
 
-  useEffect(() => {
-    fetchLeads().finally(() => setLoading(false));
+      
+    } catch (error) {
+      console.error("❌ Error conectando a Laravel:", error);
+      
+      if (error.response && error.response.status === 401) {
+          console.error("No autorizado. Redirigir a login...");
+      }
+      setLeads([]); 
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleSincronizar = async () => {
-    setLoading(true);
+  useEffect(() => {
+    fetchLeads();
+  }, [fetchLeads]);
+
+   const handleSincronizar = async () => {
     await fetchLeads();
-    setLoading(false);
   };
 
   // --- DATOS MATEMÁTICOS Y MOCKUP VISUAL ---
