@@ -8,7 +8,9 @@ export default function DetailsModal({ modalDetails, setModalDetails }) {
           <h3 className="text-lg font-bold text-gray-900">
             {modalDetails.title} <span className="text-gray-500 text-sm font-normal">({modalDetails.leads.length})</span>
           </h3>
-          <button onClick={() => setModalDetails({ isOpen: false, title: '', leads: [] })} className="text-gray-400 hover:text-gray-700 font-bold text-xl">×</button>
+          <button onClick={() => setModalDetails({ isOpen: false, title: '', leads: [] })} className="text-gray-400 hover:text-gray-700 font-bold text-xl">
+            ×
+          </button>
         </div>
         <div className="overflow-y-auto p-5">
           <table className="w-full text-left text-sm">
@@ -38,7 +40,9 @@ export default function DetailsModal({ modalDetails, setModalDetails }) {
                 );
               })}
               {modalDetails.leads.length === 0 && (
-                <tr><td colSpan="5" className="py-8 text-center text-gray-400">No hay prospectos en esta categoría todavía.</td></tr>
+                <tr>
+                  <td colSpan="5" className="py-8 text-center text-gray-400">No hay prospectos en esta categoría todavía.</td>
+                </tr>
               )}
             </tbody>
           </table>
