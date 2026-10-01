@@ -14,7 +14,7 @@ export default function ManualBroadcast() {
     setMessage(null);
 
     try {
-      await api.post('/campaigns/manual', {
+      await api.post('/campaign/manual', {
         asunto,
         cuerpo,
         fase

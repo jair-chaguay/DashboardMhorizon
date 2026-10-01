@@ -10,7 +10,7 @@ export default function AiCampaign() {
     setIsLaunching(true);
     setStatus(null);
     try {
-      await api.post('/campaigns/ai/launch');
+      await api.post('/campaign/ia');
       setStatus({ 
         type: 'success', 
         title: 'Campaña Iniciada', 
