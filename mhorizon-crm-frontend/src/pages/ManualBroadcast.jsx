@@ -1,27 +1,50 @@
 import { useState } from 'react';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import api from '../api/api';
 
 export default function ManualBroadcast() {
   const [asunto, setAsunto] = useState('');
   const [cuerpo, setCuerpo] = useState('');
   const [fase, setFase] = useState(1);
+  const [archivos, setArchivos] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [message, setMessage] = useState(null);
+
+  const modulosQuill = {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false ]}],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{'list': 'ordered'}, {'list': 'bullet'}],
+      ['link', 'image'],
+      ['clean']
+    ],
+  };
 
   const handleDespachar = async (e) => {
     e.preventDefault();
     setIsSending(true);
     setMessage(null);
+    const formData = new FormData();
+    formData.append('asunto', asunto);
+    formData.append('cuerpo', cuerpo);
+    formData.append('fase', fase);
+
+    for (let i =0; i < archivos.length; i++){
+      formData.append('adjuntos[]', archivos[i]);
+    }
+
 
     try {
-      await api.post('/campaign/manual', {
-        asunto,
-        cuerpo,
-        fase
+      await api.post('/campaign/manual', formData, {
+        headers: { 'Content-Type': 'multipart/form-data'}
       });
+
       setMessage({ type: 'success', text: 'Campaña encolada. El servidor Python comenzará el envío en breve.' });
       setAsunto('');
       setCuerpo('');
+      setArchivos([]);
+      document.getElementById('file-upload').value='';
     } catch (error) {
       setMessage({ type: 'error', text: 'Error al encolar la campaña. ' });
       console.log(error)
@@ -76,13 +99,25 @@ export default function ManualBroadcast() {
         {/* Cuerpo */}
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">Cuerpo del correo (HTML permitido)</label>
-          <textarea 
-            required
-            rows={8}
+          <div className= "bg-white rounded-lg">
+            <ReactQuill
+            themes = 'snow'
+            modules={modulosQuill} 
             value={cuerpo}
-            onChange={(e) => setCuerpo(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none font-mono text-sm"
-            placeholder="Estimados señores:<br><br>Adjuntamos la propuesta..."
+            onChange={setCuerpo}
+            className="h-64 mb-12"
+          />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-2 mt-4">Archivos Adjuntos (PDF, Excel, etc.)</label>
+          <input 
+            id="file-upload"
+            type="file" 
+            multiple
+            onChange={(e) => setArchivos(e.target.files)}
+            className="w-full p-2 border border-gray-300 rounded-lg bg-white"
           />
         </div>
 
