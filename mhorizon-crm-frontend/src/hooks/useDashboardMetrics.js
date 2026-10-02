@@ -12,7 +12,7 @@ export const useDashboardMetrics = (isAuthenticated, onUnauthorized) => {
     if (!isAuthenticated) return;
     try {
       setLoading(true);
-      const response = await api.get('/leads');
+      const response = await api.get('/tracking/dashboard');
       if (response.data && response.data.leads) {
         setData({
           leads: response.data.leads || [],
@@ -28,12 +28,12 @@ export const useDashboardMetrics = (isAuthenticated, onUnauthorized) => {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, onUnauthorized]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
-  }, [fetchData]);
+  }, [isAuthenticated]);
 
   const uniqueCampaigns = useMemo(() => {
     const campaigns = new Set();

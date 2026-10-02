@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UploadCloud, Search, Database } from 'lucide-react';
+import { UploadCloud, Search, Database, Tag, X } from 'lucide-react';
 import api from '../api/api';
 
 export default function Audience() {
@@ -8,6 +8,9 @@ export default function Audience() {
   const [message, setMessage] = useState(null);
   const [leads, setLeads] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [etiquetas, setEtiquetas] = useState('');
+  const [modalTag, setModalTag] = useState({isOpen: false, email: ''});
+  const [nuevaEtiqueta, setNuevaEtiqueta] = useState('');
 
   const fetchLeads = async () => {
     try {
@@ -19,6 +22,24 @@ export default function Audience() {
       setLeads([])
     }
   };
+
+  const handleAgregarEtiqueta = async (e) =>{
+    e.preventDefault();
+    if(!nuevaEtiqueta.trim()) return;
+
+    try{
+      await api.post('/leads/etiquetas', {
+        email: modalTag.email,
+        etiquetas: nuevaEtiqueta
+      });
+      setModalTag({isOpen: false, email: ''});
+      setNuevaEtiqueta('');
+      fetchLeads();
+    }catch (error){
+      console.error('Error al agregar etiqueta', error);
+      alert('Hubo un error al guardar la etiqueta');
+    }
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -37,6 +58,9 @@ export default function Audience() {
     setMessage(null);
     const formData = new FormData();
     formData.append('csv_file', file);
+    if(etiquetas.trim() !== ''){
+      formData.append('etiquetas', etiquetas);
+    }
 
     try {
       await api.post('/leads/upload', formData, {
@@ -66,10 +90,18 @@ export default function Audience() {
         <form onSubmit={handleUpload} className="flex transition-colors duration-300 items-center gap-4">
           <input 
             type="file" 
-            accept=".csv" 
+            accept=".csv, .txt" 
             onChange={handleFileChange}
             className="block w-full transition-all duration-300 cursor-pointer text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#D46822] file:text-white hover:file:bg-[#171E27] border border-gray-300 rounded-md"
           />
+          <input 
+            type="text" 
+            placeholder="Etiquetas (ej. Inversores)"
+            value={etiquetas}
+            onChange={(e)=> setEtiquetas(e.target.value)}
+            className="block w-64 py-2 px-3 border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-[#D46822]"
+          />
+
           <button 
             type="submit" 
             disabled={!file || uploading}
@@ -106,6 +138,8 @@ export default function Audience() {
                 <th className="py-3 px-6 font-medium">Correo Electrónico</th>
                 <th className="py-3 px-6 font-medium text-center">Fase Actual</th>
                 <th className="py-3 px-6 font-medium">Estado</th>
+                <th className="py-3 px-6 font-medium">Etiquetas</th>
+                <th className="py-3 px-6 font-medium">Acción</th>      
               </tr>
             </thead>
             <tbody>
@@ -123,6 +157,34 @@ export default function Audience() {
                       </span>
                     </td>
                     <td className="py-3 px-6 text-gray-500 text-xs">{lead.status || 'Pendiente'}</td>
+                    <td className="py-3 px-6 ">{(()=> {
+                      try{
+                        const tags = lead.etiquetas ? JSON.parse(lead.etiquetas) : [];
+                        return tags.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {tags.map((tag,i)=> (
+                              <span key={i} className="bg-gray-200 text-gray-700 px-2 py-0 5 rounded-full text-xs font-medium">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-40 text-xs">-</span>
+                        );
+                      }catch {
+                        return <span className="text-gray-400 text-xs">-</span>
+                      }
+                    })}</td>
+
+                    <td className="py-3 px-6 text-center">
+                    <button 
+                      onClick={() => setModalTag({ isOpen: true, email: lead.email })}
+                      className="text-gray-400 hover:text-orange-500 transition-colors cursor-pointer"
+                      title="Agregar Etiqueta"
+                    >
+                      <Tag size={18} />
+                    </button>
+                  </td>
                   </tr>
                 ))
               )}
@@ -130,6 +192,38 @@ export default function Audience() {
           </table>
         </div>
       </div>
+      {modalTag.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">Añadir Etiqueta</h3>
+              <button onClick={() => setModalTag({ isOpen: false, email: '' })} className="text-gray-500 hover:text-gray-800">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Prospecto: <span className="font-semibold">{modalTag.email}</span>
+            </p>
+            <form onSubmit={handleAgregarEtiqueta}>
+              <input
+                type="text"
+                autoFocus
+                placeholder="Ej. VIP, Promo..."
+                value={nuevaEtiqueta}
+                onChange={(e) => setNuevaEtiqueta(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 outline-none mb-4"
+              />
+              <button 
+                type="submit" 
+                disabled={!nuevaEtiqueta.trim()}
+                className="w-full bg-orange-500 hover:bg-[#171E27] text-white font-bold py-2 rounded transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Guardar Etiqueta
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div >
   );
 }
