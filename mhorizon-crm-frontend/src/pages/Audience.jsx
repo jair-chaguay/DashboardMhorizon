@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UploadCloud, Search, Database, Tag, X } from 'lucide-react';
+import { UploadCloud, Search, Database, Tag, X, Trash2 } from 'lucide-react';
 import api from '../api/api';
 
 export default function Audience() {
@@ -13,6 +13,33 @@ export default function Audience() {
   // Estados para el modal de etiquetas manuales
   const [modalTag, setModalTag] = useState({ isOpen: false, email: '' });
   const [nuevaEtiqueta, setNuevaEtiqueta] = useState('');
+
+  const [filtroEtiqueta, setFiltroEtiqueta] = useState('Todas');
+  const etiquetasUnicas = Array.from(new Set(leads.flatMap(l => {
+    try { return JSON.parse(l.etiquetas || '[]'); } catch { return []; }
+  })))
+
+  const handleQuitarEtiqueta = async (email, etiquetaQuitar) => {
+    try {
+      await api.post('/leads/etiquetas/remove', { email, etiqueta: etiquetaQuitar });
+      fetchLeads();
+    } catch (error) {
+      alert("Error al quitar la etiqueta", error);
+    }
+  };
+
+  const handleEliminarProspecto = async (email) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar permanetenmente a ${email} de la base de datos?`)) {
+      return;
+    }
+    try {
+      await api.post('/leads/delete', { email });
+      fetchLeads();
+    } catch (error) {
+      console.error('Error al eliminar el prospecto', error);
+      alert('Hubo un error al intentar eliminar al prospecto');
+    }
+  }
 
   const fetchLeads = async () => {
     try {
@@ -85,7 +112,7 @@ export default function Audience() {
   return (
     <div className="p-8">
       <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-         Base de Datos CRM
+        Base de Datos CRM
       </h2>
 
       {/* Sección de Carga Masiva con CSV y Etiquetas */}
@@ -95,22 +122,22 @@ export default function Audience() {
         </h3>
         <form onSubmit={handleUpload} className="space-y-4">
           <div className="flex flex-col md:flex-row items-center gap-4">
-            <input 
+            <input
               id="csv-file-input"
-              type="file" 
-              accept=".csv" 
+              type="file"
+              accept=".csv"
               onChange={handleFileChange}
               className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#D46822] file:text-white hover:file:bg-[#171E27] border border-gray-300 rounded-md cursor-pointer"
             />
-            <input 
-              type="text" 
-              placeholder="Etiquetas (ej. VIP, Evento, Inversionista)" 
+            <input
+              type="text"
+              placeholder="Etiquetas (ej. VIP, Evento, Inversionista)"
               value={etiquetasUpload}
               onChange={(e) => setEtiquetasUpload(e.target.value)}
               className="w-full md:w-80 py-2 px-3 border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-orange-500"
             />
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={!file || uploading}
               className="w-full md:w-auto bg-orange-500 hover:bg-[#171E27] text-white font-bold py-2 px-6 rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer duration-300"
             >
@@ -127,13 +154,22 @@ export default function Audience() {
 
       {/* Listado de Prospectos */}
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-lg">
+        <div className="p-4 border-b border-gray-200 flex flex-wrap gap-4 justify-between items-center bg-gray-50 rounded-t-lg">
           <h3 className="font-semibold text-gray-700">Directorio de Prospectos</h3>
+          <div className="flex gap-3">
+            <select value={filtroEtiqueta} onChange={(e) => setFiltroEtiqueta(e.target.value)}
+              className="py-2 px-3 border cursor-pointer border-gray-300 rounded-md text-sm outline-none focus:rig-2 focus:ring-orange-500 bg-white">
+              <option value="Todas">Todas las eitquetas</option>
+              <option value="SinEtiqueta">Sin etiquetas</option>
+              {etiquetasUnicas.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+            </select>
+          </div>
+
           <div className="relative">
             <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-            <input 
-              type="text" 
-              placeholder="Buscar correo..." 
+            <input
+              type="text"
+              placeholder="Buscar correo..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 pr-4 py-2 border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-orange-500 w-64"
@@ -157,7 +193,14 @@ export default function Audience() {
                   <td colSpan="5" className="py-8 text-center text-gray-500">No hay prospectos registrados. Sube un CSV para comenzar.</td>
                 </tr>
               ) : (
-                leads.filter(l => l.email.includes(searchTerm)).map((lead, idx) => (
+                leads.filter(l => l.email.includes(searchTerm)).filter(l => {
+                  if (filtroEtiqueta === 'Todas') return true;
+                  try {
+                    const tags = JSON.parse(l.etiquetas || '[]');
+                    if (filtroEtiqueta === 'SinEtiqueta') return tags.length === 0;
+                    return tags.includes(filtroEtiqueta);
+                  } catch { return false; }
+                }).map((lead, idx) => (
                   <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td className="py-3 px-6 font-medium text-gray-900">{lead.email}</td>
                     <td className="py-3 px-6 text-center">
@@ -166,7 +209,7 @@ export default function Audience() {
                       </span>
                     </td>
                     <td className="py-3 px-6 text-gray-500 text-xs">{lead.status || 'Pendiente'}</td>
-                    
+
                     {/* Renderizado de Etiquetas */}
                     <td className="py-3 px-6">
                       {(() => {
@@ -177,6 +220,9 @@ export default function Audience() {
                               {tags.map((tag, i) => (
                                 <span key={i} className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full text-xs font-semibold border border-gray-200">
                                   {tag}
+                                  <button onClick={() => handleQuitarEtiqueta(lead.email, tag)} className="ml-2 cursor-pointer text-gray-400 hover:text-red-500 rounded-full p-0 5-transition-colors">
+                                    <X size={12} />
+                                  </button>
                                 </span>
                               ))}
                             </div>
@@ -189,15 +235,22 @@ export default function Audience() {
                       })()}
                     </td>
 
-                    {/* Botón para abrir modal de etiqueta individual */}
                     <td className="py-3 px-6 text-center">
-                      <button 
-                        onClick={() => setModalTag({ isOpen: true, email: lead.email })}
-                        className="text-gray-400 hover:text-orange-500 transition-colors cursor-pointer p-1"
-                        title="Agregar Etiqueta"
-                      >
-                        <Tag size={18} />
-                      </button>
+                      <div className='flex items-center justify-center gap-3'>
+                        <button
+                          onClick={() => setModalTag({ isOpen: true, email: lead.email })}
+                          className="text-gray-400 hover:text-orange-500 transition-colors cursor-pointer p-1"
+                          title="Agregar Etiqueta"
+                        >
+                          <Tag size={18} />
+                        </button>
+
+                        <button onClick={()=> handleEliminarProspecto(lead.email)} title='Eliminar' className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-1">
+                          <Trash2 size={18} />
+                        </button>
+
+                      </div>
+
                     </td>
                   </tr>
                 ))
@@ -229,8 +282,8 @@ export default function Audience() {
                 onChange={(e) => setNuevaEtiqueta(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 outline-none mb-4 text-sm"
               />
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={!nuevaEtiqueta.trim()}
                 className="w-full bg-orange-500 hover:bg-[#171E27] text-white font-bold py-2 rounded transition-colors disabled:opacity-50 cursor-pointer text-sm"
               >
