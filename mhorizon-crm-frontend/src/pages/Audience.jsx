@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { UploadCloud, Search, Database, Tag, X, Trash2 } from 'lucide-react';
 import api from '../api/api';
+import Swal from 'sweetalert2'
 
 export default function Audience() {
   const [file, setFile] = useState(null);
@@ -34,6 +35,14 @@ export default function Audience() {
     }
     try {
       await api.post('/leads/delete', { email });
+
+       Swal.fire({
+        title: '¡Éxito!',
+        text: 'El usuario se elimino satisfactoriamente.',
+        icon: 'success',
+        confirmButtonText: 'Entendido',
+        confirmButtonColor: '#28a745'
+      })
       fetchLeads();
     } catch (error) {
       console.error('Error al eliminar el prospecto', error);

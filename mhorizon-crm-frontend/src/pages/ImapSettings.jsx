@@ -3,32 +3,24 @@ import { Power, Activity } from 'lucide-react';
 import api from '../api/api';
 
 export default function ImapSettings() {
-  const [isActive, setIsActive] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [activo, setActivo] = useState(false);
+  const [cargando, setCargando] = useState(false);
 
   useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const response = await api.get('/imap/status');
-        setIsActive(response.data.is_active);
-      } catch (error) {
-        console.error("No se pudo obtener el estado del agente IMAP", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchStatus();
+    api.get('/imap/status')
+      .then(res => setActivo(res.data.activo))
+      .catch(err => console.error(err));
   }, []);
 
-  const toggleAgent = async () => {
-    setIsLoading(true);
+  const handleToggle = async () => {
+    setCargando(true);
     try {
-      const response = await api.post('/imap/toggle');
-      setIsActive(response.data.is_active);
-    } catch (error) {
-      console.error("Error al cambiar el estado", error);
+      const res = await api.post('/imap/toggle');
+      setActivo(res.data.activo);
+    } catch (err) {
+      console.error('Error al cambiar estado IMAP', err);
     } finally {
-      setIsLoading(false);
+      setCargando(false);
     }
   };
 
@@ -46,8 +38,8 @@ export default function ImapSettings() {
           </div>
           
           <div className="flex items-center gap-3">
-            <span className={`flex h-3 w-3 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
-            <span className="font-bold text-sm text-gray-700">{isActive ? 'EN LÍNEA' : 'APAGADO'}</span>
+            <span className={`flex h-3 w-3 rounded-full ${activo ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+            <span className="font-bold text-sm text-gray-700">{activo ? 'EN LÍNEA' : 'APAGADO'}</span>
           </div>
         </div>
 
@@ -60,14 +52,14 @@ export default function ImapSettings() {
         </div>
 
         <button 
-          onClick={toggleAgent}
-          disabled={isLoading}
-          className={`w-full py-4 rounded-lg font-bold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 ${isActive ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' : 'bg-[#171E27] text-white hover:bg-[#D46822]'}`}
+          onClick={handleToggle}
+          disabled={cargando}
+          className={`w-full py-4 rounded-lg font-bold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 ${activo ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' : 'bg-[#171E27] text-white hover:bg-[#D46822]'}`}
         >
           <Power size={20} />
-          {isLoading ? 'Cambiando estado...' : isActive ? 'DETENER AGENTE IMAP' : 'INICIAR AGENTE IMAP'}
+          {cargando ? 'Cambiando estado...' : activo ? 'DETENER AGENTE IMAP' : 'INICIAR AGENTE IMAP'}
         </button>
       </div>
     </div>
   );
-}
+} 
