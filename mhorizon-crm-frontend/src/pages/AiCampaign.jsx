@@ -47,7 +47,7 @@ export default function AiCampaign() {
             <button 
               onClick={handleLaunch}
               disabled={isLaunching}
-              className="bg-orange-500 hover:bg-[#171E27] duration-300 text-white font-bold py-3 px-8 rounded-lg shadow-lg flex items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+              className="bg-orange-500 hover:bg-blue-200 duration-300 text-white font-bold py-3 px-8 rounded-lg shadow-lg flex items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
             >
               {isLaunching ? 'Conectando con IA...' : <><PlayCircle size={20} /> Ejecutar Lote de Hoy</>}
             </button>

@@ -45,16 +45,16 @@ export default function ImapSettings() {
 
         <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 mb-6">
           <ul className="text-sm text-gray-600 space-y-3">
-            <li className="flex items-center gap-2"><Activity size={16} className="text-blue-500"/> Clasifica intenciones (Positivo, Negativo, Duda).</li>
-            <li className="flex items-center gap-2"><Activity size={16} className="text-blue-500"/> Responde dudas basándose en la memoria del hilo.</li>
-            <li className="flex items-center gap-2"><Activity size={16} className="text-blue-500"/> Alerta al equipo corporativo ante prospectos calientes.</li>
+            <li className="flex items-center gap-2"><Activity size={16} className="text-blue-200"/> Clasifica intenciones (Positivo, Negativo, Duda).</li>
+            <li className="flex items-center gap-2"><Activity size={16} className="text-blue-200"/> Responde dudas basándose en la memoria del hilo.</li>
+            <li className="flex items-center gap-2"><Activity size={16} className="text-blue-200"/> Alerta al equipo corporativo ante prospectos calientes.</li>
           </ul>
         </div>
 
         <button 
           onClick={handleToggle}
           disabled={cargando}
-          className={`w-full py-4 rounded-lg font-bold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 ${activo ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' : 'bg-[#171E27] text-white hover:bg-[#D46822]'}`}
+          className={`w-full py-4 rounded-lg font-bold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 ${activo ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' : 'bg-blue-200 text-white hover:bg-orange-500'}`}
         >
           <Power size={20} />
           {cargando ? 'Cambiando estado...' : activo ? 'DETENER AGENTE IMAP' : 'INICIAR AGENTE IMAP'}

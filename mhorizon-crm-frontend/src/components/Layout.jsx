@@ -14,7 +14,7 @@ export default function Layout({ children, user, onLogout }) {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans text-gray-800">
-      <aside className="w-64 bg-[#171E27] text-white flex flex-col shadow-xl">
+      <aside className="w-64 bg-blue-200 text-white flex flex-col shadow-xl">
         <div className="p-6 border-b border-gray-700/50">
           <span className="inline-block bg-orange-500/10 text-orange-500 border border-orange-500/20 px-2 py-1 rounded text-[0.65rem] font-bold tracking-widest uppercase mb-2">
             Panel Administrativo
@@ -61,7 +61,7 @@ export default function Layout({ children, user, onLogout }) {
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-[1400px] mx-auto bg-white border border-gray-200 shadow-sm rounded-lg min-h-[85vh]">
+          <div className="max-w-350 mx-auto bg-white border border-gray-200 shadow-sm rounded-lg min-h-[85vh]">
             {children}
           </div>
         </div>

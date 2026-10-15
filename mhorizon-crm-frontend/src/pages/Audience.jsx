@@ -136,7 +136,7 @@ export default function Audience() {
               type="file"
               accept=".csv"
               onChange={handleFileChange}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#D46822] file:text-white hover:file:bg-[#171E27] border border-gray-300 rounded-md cursor-pointer"
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-orange-500 file:text-white hover:file:bg-blue-200 border border-gray-300 rounded-md cursor-pointer"
             />
             <input
               type="text"
@@ -148,7 +148,7 @@ export default function Audience() {
             <button
               type="submit"
               disabled={!file || uploading}
-              className="w-full md:w-auto bg-orange-500 hover:bg-[#171E27] text-white font-bold py-2 px-6 rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer duration-300"
+              className="w-full md:w-auto bg-orange-500 hover:bg-blue-200 text-white font-bold py-2 px-6 rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer duration-300"
             >
               {uploading ? 'Subiendo...' : <><UploadCloud size={18} /> Subir</>}
             </button>
@@ -213,7 +213,7 @@ export default function Audience() {
                   <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td className="py-3 px-6 font-medium text-gray-900">{lead.email}</td>
                     <td className="py-3 px-6 text-center">
-                      <span className="bg-blue-100 text-blue-800 font-bold px-2 py-1 rounded text-xs">
+                      <span className="bg-blue-200 text-white font-bold px-2 py-1 rounded text-xs">
                         Fase {lead.fase || 1}
                       </span>
                     </td>
@@ -294,7 +294,7 @@ export default function Audience() {
               <button
                 type="submit"
                 disabled={!nuevaEtiqueta.trim()}
-                className="w-full bg-orange-500 hover:bg-[#171E27] text-white font-bold py-2 rounded transition-colors disabled:opacity-50 cursor-pointer text-sm"
+                className="w-full bg-orange-500 hover:bg-blue-200 text-white font-bold py-2 rounded transition-colors disabled:opacity-50 cursor-pointer text-sm"
               >
                 Guardar Etiqueta
               </button>

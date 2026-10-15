@@ -104,10 +104,10 @@ export default function Dashboard() {
               
             </h2>
             <div className='flex gap-8 items-center mr-4 mt-5 '>
-              <button onClick={fetchData} className="bg-[#171E27] ml-2 text-white hover:bg-[#D46822] cursor-pointer  px-8 py-2 rounded-md transition-colors duration-300">Actualizar</button>
+              <button onClick={fetchData} className="bg-blue-200 ml-2 text-white hover:bg-orange-500 cursor-pointer  px-8 py-2 rounded-md transition-colors duration-300">Actualizar</button>
               <button 
               onClick={handleGlobalReport}
-              className="  cursor-pointer text-[#171E27] hover:bg-blue-100 border border-blue-200 px-4 py-2 rounded-md text-sm font-semibold transition"
+              className="  cursor-pointer text-blue-200 hover:bg-blue-100 border border-blue-200 px-4 py-2 rounded-md text-sm font-semibold transition"
             >
                Ver Reporte Global CRM
             </button>
@@ -329,7 +329,7 @@ export default function Dashboard() {
                     {linkInsights.map((link, i) => (
                       <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition">
                         <td className="py-2">
-                          <a href={link.url} target="_blank" rel="noreferrer" className="text-blue-600 truncate max-w-[200px] block">{link.url}</a>
+                          <a href={link.url} target="_blank" rel="noreferrer" className="text-blue-600 truncate max-w-50 block">{link.url}</a>
                         </td>
                         <td className="py-2 font-bold">{link.total}</td>
                       </tr>

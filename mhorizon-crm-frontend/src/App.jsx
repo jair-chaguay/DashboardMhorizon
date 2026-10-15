@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import api from './api/api';
-
+import './index.css'
 // Componentes
 import Login from './components/Login';
 import Layout from './components/Layout';

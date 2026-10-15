@@ -176,7 +176,7 @@ export default function ManualBroadcast() {
         <button
           type="submit"
           disabled={isSending}
-          className="bg-orange-500 hover:bg-[#171E27] duration-300 text-white font-bold py-3 px-6 rounded-md shadow-lg flex items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+          className="bg-orange-500 hover:bg-blue-200 duration-300 text-white font-bold py-3 px-6 rounded-md shadow-lg flex items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
         >
           {isSending ? 'Encolando...' : 'Enviar Campaña'}
         </button>
