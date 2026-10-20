@@ -93,28 +93,45 @@ export const useDashboardMetrics = () => {
   );
 
   const metrics = useMemo(() => {
+
+    const sentEvents = filteredLogs.filter(l => l.event_type === 'sent');
+    const openEvents = filteredLogs.filter(l => l.event_type === 'open');
+    const clickEvents = filteredLogs.filter(l => l.event_type === 'click');
+    const blockedEvents = filteredLogs.filter(l => l.event_type === 'blocked');
+    const failedEvents = filteredLogs.filter(l => l.event_type === 'failed');
+    const spamEvents = filteredLogs.filter(l => l.event_type === 'spam');
+    const unsubEvents = filteredLogs.filter(l => l.event_type === 'unsubscribed');
+
+    const blocked = new Set(blockedEvents.map(e => e.email)).size;
+    const failed = new Set(failedEvents.map(e => e.email)).size;
+    const spam = new Set(spamEvents.map(e => e.email)).size;
+    const unsubscribed = new Set(unsubEvents.map(e => e.email)).size;
+
+    
     let sent, delivered, uniqueOpens, uniqueClicks, totalOpens, totalClicks;
 
     if (isGlobalView) {
-      sent = filteredLeads.reduce((acc, l) => acc + (l.sent || 1), 0);
-      delivered = filteredLeads.reduce((acc, l) => acc + (l.delivered || 1), 0);
-      uniqueOpens = filteredLeads.filter(l => l.opens > 0).length;
-      uniqueClicks = filteredLeads.filter(l => l.clicks > 0).length;
-      totalOpens = filteredLeads.reduce((acc, l) => acc + (l.opens || 0), 0);
+      sent = sentEvents.length > 0
+      ? sentEvents.length
+      : filteredLeads.reduce((acc, l)=> acc + (l.sent || 1), 0);
+
+      delivered= Math.max(0, sent -blocked -failed);
+      uniqueOpens = filteredLeads.filter(l=> l.opens > 0).length;
+      uniqueClicks = filteredLeads.filter(l=> l.clicks > 0).length;
+      totalOpens = filteredLeads.reduce((acc, l)=> acc + (l.opens || 0), 0);
       totalClicks = filteredClicks.length;
+      
     } else {
-      const openEvents = filteredLogs.filter(l => l.event_type === 'open');
-      const clickEvents = filteredLogs.filter(l => l.event_type === 'click');
-      sent = filteredLogs.filter(l => l.event_type === 'sent').length;
-      delivered = sent;
-      uniqueOpens = new Set(openEvents.map(e => e.email)).size;
+      sent = sentEvents.length;
+      delivered = Math.max(0, sent-blocked-failed);
+      uniqueOpens = new Set(openEvents.map(e=> e.email)).size;
       uniqueClicks = new Set(clickEvents.map(e => e.email)).size;
       totalOpens = openEvents.length;
       totalClicks = clickEvents.length;
     }
 
     return {
-      sent, delivered, blocked: 0, failed: 0, uniqueOpens, uniqueClicks, spam: 0, unsubscribed: 0, totalOpens, totalClicks,
+      sent, delivered, blocked, failed, uniqueOpens, uniqueClicks, spam, unsubscribed, totalOpens, totalClicks,
       deliveryRate: `${percent(delivered, sent)}%`,
       openRate: `${percent(uniqueOpens, delivered)}%`,
       clickRate: `${percent(uniqueClicks, delivered)}%`,

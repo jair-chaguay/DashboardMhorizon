@@ -116,7 +116,6 @@ export default function Dashboard() {
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl ml-4 mt-5 font-bold text-gray-900 flex items-center gap-2">
               Campañas Recientes
-              
             </h2>
             <div className='flex gap-8 items-center mr-4 mt-5 '>
               <button onClick={fetchData} disabled={loading} className="disabled:opacity-70 disabled:cursor-wait bg-blue-200 ml-2 text-white hover:bg-orange-500 cursor-pointer  px-8 py-2 rounded-md transition-colors duration-300">{loading ? 'Actualizando...' : 'Actualizar'}</button>
@@ -127,7 +126,6 @@ export default function Dashboard() {
                Ver Reporte Global CRM
             </button>
             </div>
-            
           </div>
 
           {campaignsSummary.length === 0 ? (
@@ -222,7 +220,14 @@ export default function Dashboard() {
         <div className="animate-fade-in">
           {/* Fila 1: KPIs */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <Card title="Entrega" action={{ label: 'Ver detalles', onClick: () => openDetails('sent') }}>
+            {/* Tarjeta de Entrega con el botón conectado a openDetails('blocked') */}
+            <Card 
+              title="Entrega" 
+              action={{ 
+                label: metrics.blocked > 0 ? `Ver ${metrics.blocked} bloqueados` : 'Ver detalles', 
+                onClick: () => openDetails('blocked') 
+              }}
+            >
               <div className="grid grid-cols-3 gap-4">
                 <MetricBox label="Tasa de entrega" value={metrics.deliveryRate} />
                 <MetricBox label="Bloqueado" value={metrics.blocked} />
