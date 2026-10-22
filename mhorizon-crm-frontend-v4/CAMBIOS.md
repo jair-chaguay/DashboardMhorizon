@@ -1,4 +1,4 @@
-# mhorizon-crm-frontend-v4 (propuesta, aún no subida a GitHub)
+# mhorizon-crm-frontend-v4
 
 Pulido visual sobre v3: misma lógica, mismas pantallas y mismas acciones, pero con menos ruido y lectura más fácil.
 Colores de marca MHORIZON (azul oscuro #171E27 / #0A2C5E y naranja #D4681C), esquinas moderadas (tarjetas 10 px, botones y campos 6-8 px).
