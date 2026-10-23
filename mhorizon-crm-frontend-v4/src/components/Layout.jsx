@@ -114,7 +114,9 @@ export default function Layout({ children, user, onLogout }) {
             </Link>
           )}
         </header>
-        <div className="flex-1 overflow-y-auto">
+        {/* relative: los elementos ocultos con position:absolute (sr-only) se ubican dentro del área que hace scroll;
+            sin esto se salen a la página y aparece un segundo scroll con espacio vacío */}
+        <div className="relative flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto p-4 lg:p-8"><div key={location.pathname} className="animate-fade-up">{children}</div></div>
         </div>
       </main>
