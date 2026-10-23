@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../api/api';
 
+
+
 export const useDashboardMetrics = (isAuthenticated, onUnauthorized) => {
   const [data, setData] = useState({ leads: [], linkClicks: [], emailLogs: [] });
   const [loading, setLoading] = useState(true);

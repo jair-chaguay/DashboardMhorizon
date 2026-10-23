@@ -1,7 +1,23 @@
 import { useState, useEffect } from 'react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
+import { Send, Loader2, Paperclip } from 'lucide-react';
 import api from '../api/api';
+import PageHeader from '../components/PageHeader';
+import { ui } from '../utils/theme';
+
+const Step = ({ n, title, hint, children }) => (
+  <section className={`${ui.card} p-5`}>
+    <div className="flex items-start gap-3 mb-4">
+      <span className="h-6 w-6 mt-px shrink-0 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold grid place-items-center">{n}</span>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-[15px] font-semibold text-slate-900">{title}</h3>
+        {hint && <p className="text-[13px] text-slate-500 mt-0.5">{hint}</p>}
+      </div>
+    </div>
+    {children}
+  </section>
+);
 
 export default function ManualBroadcast() {
   const [asunto, setAsunto] = useState('');
@@ -82,93 +98,94 @@ export default function ManualBroadcast() {
   };
 
   return (
-    <div className="p-8">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-        Difusión Manual Segmentada
-      </h2>
+    <div>
+      <PageHeader description="Elige la fase y las etiquetas, redacta el correo y envíalo a ese público.">Difusión manual</PageHeader>
 
-      <form onSubmit={handleDespachar} className="max-w-3xl space-y-6">
+      <form onSubmit={handleDespachar} className="max-w-3xl space-y-5">
 
         {/* Selección de Fase */}
-        <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
-          <label className="block text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">
-            Público Objetivo (Fase del CRM)
-          </label>
-          <div className="grid grid-cols-5 gap-3">
-            {[1, 2, 3, 4, 5].map(num => (
-              <button
-                type="button"
-                key={num}
-                onClick={() => setFase(num)}
-                className={`cursor-pointer duration-300 py-2 px-4 text-sm font-semibold rounded-md border transition-all ${fase === num
-                    ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-sm'
-                    : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
-                  }`}
-              >
-                Fase {num}
-              </button>
-            ))}
+        <Step n="1" title="Público objetivo" hint="Fase del CRM y, si quieres afinar, etiquetas.">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+            {[1, 2, 3, 4, 5].map(num => {
+              const activo = fase === num;
+              return (
+                <button
+                  type="button"
+                  key={num}
+                  onClick={() => setFase(num)}
+                  aria-pressed={activo}
+                  className={`cursor-pointer rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors ${activo
+                    ? 'bg-brand-50/60 border-brand-600 ring-1 ring-brand-600 text-brand-700'
+                    : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
+                >
+                  Fase {num}
+                </button>
+              );
+            })}
           </div>
 
           {availableTags.length > 0 && (
-            <div className="mt-5 pt-5 border-t border-gray-200">
-              <label className="block text-xs font-bold text-gray-600 uppercase mb-3">
-                Filtrar por Etiqueta
-              </label>
-              <div className="flex flex-wrap gap-3">
-                {availableTags.map(tag => (
-                  <label key={tag} className="flex items-center gap-2 bg-white border border-gray-300 px-3 py-1 5 rounded-md cursor-pointer hover:bg-gray-50 transition-colors">
-                    <input type="checkbox" checked={selectedTags.includes(tag)} onChange={() => toggleTag(tag)}
-                      className='text-orange-500 rounded focus:ring-orange-500' />
-                    <span className="text-sm font-medium text-gray-700">{tag}</span>
-                  </label>
-                ))}
+            <div className="mt-5 pt-5 border-t border-slate-100">
+              <p className={`${ui.label} mb-2.5`}>Filtrar por etiqueta <span className="font-normal text-slate-500">(opcional)</span></p>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map(tag => {
+                  const activa = selectedTags.includes(tag);
+                  return (
+                    <button type="button" key={tag} onClick={() => toggleTag(tag)} aria-pressed={activa}
+                      className={`cursor-pointer rounded-md border px-2.5 py-1 text-[13px] font-medium transition-colors ${activa
+                        ? 'bg-navy-900 border-navy-900 text-white'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                      {tag}
+                    </button>
+                  );
+                })}
               </div>
-              {selectedTags.length === 0 && <span className="text-sm text-gray-400 mt-2 block">Si no selecciona ninguna, se enviará a TODOS los prospectos de la Fase {fase}</span>}
+              {selectedTags.length === 0 && <p className="text-[13px] text-slate-500 mt-3">Si no selecciona ninguna, se enviará a todos los prospectos de la Fase {fase}.</p>}
             </div>
           )}
-        </div>
+        </Step>
 
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">Asunto del correo</label>
+        <Step n="2" title="Mensaje" hint="Puedes pegar imágenes directamente en el editor.">
+          <label htmlFor="asunto" className={`${ui.label} block mb-2`}>Asunto del correo</label>
           <input
+            id="asunto"
             type="text"
             required
             value={asunto}
             onChange={(e) => setAsunto(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
+            className={`${ui.input} w-full`}
             placeholder="Ej. Propuesta exclusiva..."
           />
-        </div>
 
-        {/* Cuerpo */}
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">Cuerpo del correo (Puedes pegar imágenes)</label>
-          <div className="bg-white rounded-lg">
+          {/* Cuerpo */}
+          <p className={`${ui.label} mt-5 mb-2`}>Cuerpo del correo</p>
+          <div className="editor-body">
             <ReactQuill
               theme="snow"
               value={cuerpo}
               onChange={setCuerpo}
               modules={modulosQuill}
-              className="h-64 mb-12"
             />
           </div>
-        </div>
+        </Step>
 
         {/* Adjuntos */}
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2 mt-4">Archivos Adjuntos (PDF, Excel, etc.)</label>
+        <Step n="3" title="Adjuntos" hint="Opcional. PDF, Excel, imágenes, etc.">
+          <label htmlFor="file-upload"
+            className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-4 text-sm font-medium text-slate-600 hover:border-slate-400 hover:bg-slate-50 transition-colors cursor-pointer">
+            <Paperclip size={16} /> {archivos.length > 0 ? `${archivos.length} archivo${archivos.length > 1 ? 's' : ''} seleccionado${archivos.length > 1 ? 's' : ''}` : 'Elegir archivos'}
+          </label>
           <input
             id="file-upload"
             type="file"
             multiple
             onChange={(e) => setArchivos(e.target.files)}
-            className="w-full p-2 border border-gray-300 rounded-lg bg-white"
+            className="sr-only"
           />
-        </div>
+        </Step>
 
         {message && (
-          <div className={`p-4 rounded-lg font-medium text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          <div role="status" className={`p-3 rounded-lg font-medium text-sm animate-fade-in ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
             {message.text}
           </div>
         )}
@@ -176,13 +193,11 @@ export default function ManualBroadcast() {
         <button
           type="submit"
           disabled={isSending}
-          className="bg-orange-500 hover:bg-blue-200 duration-300 text-white font-bold py-3 px-6 rounded-md shadow-lg flex items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+          className={`${ui.btnPrimary} h-11 px-6`}
         >
-          {isSending ? 'Encolando...' : 'Enviar Campaña'}
+          {isSending ? <><Loader2 size={17} className="animate-spin" /> Encolando...</> : <><Send size={17} /> Enviar campaña</>}
         </button>
       </form>
     </div>
   );
-
-
 }

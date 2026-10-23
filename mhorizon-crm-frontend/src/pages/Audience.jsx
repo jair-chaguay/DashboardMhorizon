@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import { UploadCloud, Search, Database, Tag, X, Trash2 } from 'lucide-react';
+import { UploadCloud, Search, Tag, X, Trash2 } from 'lucide-react';
 import api from '../api/api';
 import Swal from 'sweetalert2'
+import PageHeader from '../components/PageHeader';
+import Modal from '../components/Modal';
+import { selectClass, ui } from '../utils/theme';
 
 export default function Audience() {
   const [file, setFile] = useState(null);
@@ -69,7 +72,7 @@ export default function Audience() {
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
   };
-  
+
 
   const handleUpload = async (e) => {
     e.preventDefault();
@@ -119,148 +122,146 @@ export default function Audience() {
     }
   };
 
+  const leadsFiltrados = leads.filter(l => l.email.includes(searchTerm)).filter(l => {
+    if (filtroEtiqueta === 'Todas') return true;
+    try {
+      const tags = JSON.parse(l.etiquetas || '[]');
+      if (filtroEtiqueta === 'SinEtiqueta') return tags.length === 0;
+      return tags.includes(filtroEtiqueta);
+    } catch { return false; }
+  });
+
   return (
-    <div className="p-8">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-        Base de Datos CRM
-      </h2>
+    <div className="space-y-5">
+      <PageHeader description="Tus prospectos, su fase en el embudo y sus etiquetas.">Base de datos</PageHeader>
 
       {/* Sección de Carga Masiva con CSV y Etiquetas */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Database size={18} /> Cargar nuevos prospectos (CSV)
-        </h3>
-        <form onSubmit={handleUpload} className="space-y-4">
-          <div className="flex flex-col md:flex-row items-center gap-4">
+      <section className={`${ui.card} p-5`}>
+        <div className="mb-4">
+          <h3 className="text-[15px] font-semibold text-slate-900">Cargar prospectos desde CSV</h3>
+          <p className="text-[13px] text-slate-500 mt-0.5">Las etiquetas que escribas se asignan a todos los prospectos del archivo.</p>
+        </div>
+        <form onSubmit={handleUpload} className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+          <label className={`relative w-full md:flex-1 min-w-0 h-10 flex items-center gap-3 px-3 rounded-lg border border-dashed cursor-pointer transition-colors ${file ? 'border-slate-300 bg-slate-50' : 'border-slate-300 hover:border-slate-400'}`}>
             <input
               id="csv-file-input"
               type="file"
               accept=".csv"
               onChange={handleFileChange}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-orange-500 file:text-white hover:file:bg-blue-200 border border-gray-300 rounded-md cursor-pointer"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
-            <input
-              type="text"
-              placeholder="Etiquetas (ej. VIP, Evento, Inversionista)"
-              value={etiquetasUpload}
-              onChange={(e) => setEtiquetasUpload(e.target.value)}
-              className="w-full md:w-80 py-2 px-3 border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-orange-500"
-            />
-            <button
-              type="submit"
-              disabled={!file || uploading}
-              className="w-full md:w-auto bg-orange-500 hover:bg-blue-200 text-white font-bold py-2 px-6 rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer duration-300"
-            >
-              {uploading ? 'Subiendo...' : <><UploadCloud size={18} /> Subir</>}
-            </button>
-          </div>
+            <UploadCloud size={17} className={`shrink-0 ${file ? 'text-brand-600' : 'text-slate-400'}`} />
+            {file
+              ? <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{file.name}</span>
+              : <span className="min-w-0 flex-1 truncate text-sm text-slate-500"><span className="font-semibold text-slate-700">Elegir archivo CSV</span></span>}
+          </label>
+          <input
+            type="text"
+            placeholder="Etiquetas (ej. VIP, Evento, Inversionista)"
+            value={etiquetasUpload}
+            onChange={(e) => setEtiquetasUpload(e.target.value)}
+            className={`${ui.input} w-full md:w-80`}
+          />
+          <button
+            type="submit"
+            disabled={!file || uploading}
+            className={`${ui.btnPrimary} px-5 whitespace-nowrap`}
+          >
+            {uploading ? 'Subiendo...' : 'Subir archivo'}
+          </button>
         </form>
         {message && (
-          <div className={`mt-4 p-3 rounded-md text-sm font-medium ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          <div role="status" className={`mt-4 p-3 rounded-lg text-sm font-medium animate-fade-in ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
             {message.text}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Listado de Prospectos */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-        <div className="p-4 border-b border-gray-200 flex flex-wrap gap-4 justify-between items-center bg-gray-50 rounded-t-lg">
-          <h3 className="font-semibold text-gray-700">Directorio de Prospectos</h3>
-          <div className="flex gap-3">
-            <select value={filtroEtiqueta} onChange={(e) => setFiltroEtiqueta(e.target.value)}
-              className="py-2 px-3 border cursor-pointer border-gray-300 rounded-md text-sm outline-none focus:rig-2 focus:ring-orange-500 bg-white">
-              <option value="Todas">Todas las eitquetas</option>
-              <option value="SinEtiqueta">Sin etiquetas</option>
-              {etiquetasUnicas.map(tag => <option key={tag} value={tag}>{tag}</option>)}
-            </select>
-          </div>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+      <section className={`${ui.card} overflow-hidden`}>
+        <div className="p-4 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
+          <div className="relative sm:flex-1 sm:max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
               placeholder="Buscar correo..."
+              aria-label="Buscar correo"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-orange-500 w-64"
+              className={`${ui.input} pl-9 w-full`}
             />
+          </div>
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <span className="text-[13px] text-slate-500 hidden sm:inline mr-1">{leadsFiltrados.length} de {leads.length}</span>
+            <select value={filtroEtiqueta} onChange={(e) => setFiltroEtiqueta(e.target.value)} className={`${selectClass} w-full sm:w-auto`} aria-label="Filtrar por etiqueta">
+              <option value="Todas">Etiqueta: todas</option>
+              <option value="SinEtiqueta">Sin etiquetas</option>
+              {etiquetasUnicas.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+            </select>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-200 bg-white text-gray-600">
-                <th className="py-3 px-6 font-medium">Correo Electrónico</th>
-                <th className="py-3 px-6 font-medium text-center">Fase Actual</th>
-                <th className="py-3 px-6 font-medium">Estado</th>
-                <th className="py-3 px-6 font-medium">Etiquetas</th>
-                <th className="py-3 px-6 font-medium text-center">Acción</th>
+              <tr className="bg-slate-50/60 border-y border-slate-100">
+                <th className={ui.th}>Correo electrónico</th>
+                <th className={ui.th}>Fase</th>
+                <th className={ui.th}>Estado</th>
+                <th className={ui.th}>Etiquetas</th>
+                <th className={ui.th}><span className="sr-only">Acciones</span></th>
               </tr>
             </thead>
             <tbody>
               {leads.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="py-8 text-center text-gray-500">No hay prospectos registrados. Sube un CSV para comenzar.</td>
+                  <td colSpan="5" className="py-10 text-center text-slate-500">No hay prospectos registrados. Sube un CSV para comenzar.</td>
                 </tr>
               ) : (
-                leads.filter(l => l.email.includes(searchTerm)).filter(l => {
-                  if (filtroEtiqueta === 'Todas') return true;
-                  try {
-                    const tags = JSON.parse(l.etiquetas || '[]');
-                    if (filtroEtiqueta === 'SinEtiqueta') return tags.length === 0;
-                    return tags.includes(filtroEtiqueta);
-                  } catch { return false; }
-                }).map((lead, idx) => (
-                  <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="py-3 px-6 font-medium text-gray-900">{lead.email}</td>
-                    <td className="py-3 px-6 text-center">
-                      <span className="bg-blue-200 text-white font-bold px-2 py-1 rounded text-xs">
-                        Fase {lead.fase || 1}
-                      </span>
-                    </td>
-                    <td className="py-3 px-6 text-gray-500 text-xs">{lead.status || 'Pendiente'}</td>
+                leadsFiltrados.map((lead, idx) => (
+                  <tr key={idx} className="group border-t border-slate-100 first:border-t-0 hover:bg-slate-50 transition-colors">
+                    <td className="py-2.5 px-5 font-medium text-slate-900">{lead.email}</td>
+                    <td className="py-2.5 px-5 text-slate-600 whitespace-nowrap">Fase {lead.fase || 1}</td>
+                    <td className="py-2.5 px-5 text-slate-600 whitespace-nowrap">{lead.status || 'Pendiente'}</td>
 
                     {/* Renderizado de Etiquetas */}
-                    <td className="py-3 px-6">
+                    <td className="py-2.5 px-5">
                       {(() => {
                         try {
                           const tags = lead.etiquetas ? JSON.parse(lead.etiquetas) : [];
                           return tags.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {tags.map((tag, i) => (
-                                <span key={i} className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full text-xs font-semibold border border-gray-200">
+                                <span key={i} className="inline-flex items-center gap-0.5 bg-slate-100 text-slate-700 pl-2 pr-1 py-0.5 rounded-md text-xs font-medium">
                                   {tag}
-                                  <button onClick={() => handleQuitarEtiqueta(lead.email, tag)} className="ml-2 cursor-pointer text-gray-400 hover:text-red-500 rounded-full p-0 5-transition-colors">
+                                  <button onClick={() => handleQuitarEtiqueta(lead.email, tag)} title={`Quitar ${tag}`} aria-label={`Quitar ${tag}`} className="cursor-pointer text-slate-400 hover:text-rose-600 rounded p-0.5 transition-colors">
                                     <X size={12} />
                                   </button>
                                 </span>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-gray-400 text-xs">-</span>
+                            <span className="text-slate-300">—</span>
                           );
                         } catch {
-                          return <span className="text-gray-400 text-xs">-</span>;
+                          return <span className="text-slate-300">—</span>;
                         }
                       })()}
                     </td>
 
-                    <td className="py-3 px-6 text-center">
-                      <div className='flex items-center justify-center gap-3'>
+                    <td className="py-2.5 pr-4 text-right">
+                      <div className="flex items-center justify-end gap-0.5 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
                         <button
                           onClick={() => setModalTag({ isOpen: true, email: lead.email })}
-                          className="text-gray-400 hover:text-orange-500 transition-colors cursor-pointer p-1"
-                          title="Agregar Etiqueta"
+                          className="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-200/60 hover:text-slate-700 transition-colors cursor-pointer"
+                          title="Agregar etiqueta" aria-label="Agregar etiqueta"
                         >
-                          <Tag size={18} />
+                          <Tag size={15} />
                         </button>
-
-                        <button onClick={()=> handleEliminarProspecto(lead.email)} title='Eliminar' className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-1">
-                          <Trash2 size={18} />
+                        <button onClick={() => handleEliminarProspecto(lead.email)} title="Eliminar" aria-label="Eliminar"
+                          className="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer">
+                          <Trash2 size={15} />
                         </button>
-
                       </div>
-
                     </td>
                   </tr>
                 ))
@@ -268,41 +269,37 @@ export default function Audience() {
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
 
       {/* Modal flotante para agregar etiqueta manual */}
-      {modalTag.isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Añadir Etiqueta</h3>
-              <button onClick={() => setModalTag({ isOpen: false, email: '' })} className="text-gray-500 hover:text-gray-800 cursor-pointer">
-                <X size={20} />
-              </button>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Prospecto: <span className="font-semibold">{modalTag.email}</span>
-            </p>
-            <form onSubmit={handleAgregarEtiquetaManual}>
-              <input
-                type="text"
-                autoFocus
-                placeholder="Ej. VIP, Promo, etc."
-                value={nuevaEtiqueta}
-                onChange={(e) => setNuevaEtiqueta(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 outline-none mb-4 text-sm"
-              />
-              <button
-                type="submit"
-                disabled={!nuevaEtiqueta.trim()}
-                className="w-full bg-orange-500 hover:bg-blue-200 text-white font-bold py-2 rounded transition-colors disabled:opacity-50 cursor-pointer text-sm"
-              >
-                Guardar Etiqueta
-              </button>
-            </form>
-          </div>
+      <Modal isOpen={modalTag.isOpen} onClose={() => setModalTag({ isOpen: false, email: '' })} className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-base font-semibold text-slate-900">Añadir etiqueta</h3>
+          <button onClick={() => setModalTag({ isOpen: false, email: '' })} aria-label="Cerrar" className="text-slate-400 hover:text-slate-800 cursor-pointer">
+            <X size={20} />
+          </button>
         </div>
-      )}
+        <p className="text-sm text-slate-600 mb-4">
+          Prospecto: <span className="font-bold">{modalTag.email}</span>
+        </p>
+        <form onSubmit={handleAgregarEtiquetaManual}>
+          <input
+            type="text"
+            autoFocus
+            placeholder="Ej. VIP, Promo, etc."
+            value={nuevaEtiqueta}
+            onChange={(e) => setNuevaEtiqueta(e.target.value)}
+            className={`${ui.input} w-full mb-4`}
+          />
+          <button
+            type="submit"
+            disabled={!nuevaEtiqueta.trim()}
+            className={`${ui.btnPrimary} w-full`}
+          >
+            Guardar etiqueta
+          </button>
+        </form>
+      </Modal>
     </div>
   );
 }

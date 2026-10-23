@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../api/api';
 import { parseDate, isWithinFilter, toDayKey, formatDayLabel, formatDateTime } from '../utils/dates';
 import { summarizeDeliverability } from '../utils/deliverability';
+import { isReplied } from '../utils/status';
 
 const EMPTY_MODAL = { isOpen: false, title: '', leads: [] };
 const MOBILE_UA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
@@ -127,7 +128,7 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
       const emails = new Set(filteredLogs.filter(l => l.event_type === 'sent').map(l => l.email));
       return data.leads.filter(l => emails.has(l.email));
     })();
-    const replied = audience.filter(l => l.status === 'Respondió').length;
+    const replied = audience.filter(l => isReplied(l.status)).length;
 
     return {
       replied, replyBase: audience.length, replyRate: `${percent(replied, audience.length)}%`,
@@ -284,7 +285,7 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
         delivered, bounces: d.bounces, hardBounces: d.hard.size + d.unknown.size, softBounces: d.soft.size, hasBounceTypes: d.hasBounceTypes,
         unsubscribed: d.unsub.size, spam: d.spam.size,
         openCount: camp.uniqueOpens.size, clickCount: camp.uniqueClicks.size,
-        replies: [...camp.recipients].filter(e => leadByEmail.get(e)?.status === 'Respondió').length,
+        replies: [...camp.recipients].filter(e => isReplied(leadByEmail.get(e)?.status)).length,
       };
     }).sort((a, b) => (b.lastDate?.getTime() || 0) - (a.lastDate?.getTime() || 0));
   }, [data.emailLogs, data.leads]);
@@ -305,7 +306,7 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
         leads.forEach(l => { if (l.clicks > 0) affectedEmails.add(l.email); });
         title = "Contactos que Hicieron Clic (Todos los tiempos)";
       } else if (type === 'replied') {
-        leads.forEach(l => { if (l.status === 'Respondió') affectedEmails.add(l.email); });
+        leads.forEach(l => { if (isReplied(l.status)) affectedEmails.add(l.email); });
         title = "Contactos que Respondieron (Todos los tiempos)";
       }
     } else {
@@ -314,7 +315,7 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
       const byStatus = type === 'replied';
       const statusByEmail = new Map(data.leads.map(l => [l.email, l.status]));
       filteredLogs.filter(l => l.event_type === eventType).forEach(l => {
-        if (!byStatus || statusByEmail.get(l.email) === 'Respondió') affectedEmails.add(l.email);
+        if (!byStatus || isReplied(statusByEmail.get(l.email))) affectedEmails.add(l.email);
       });
       title = `${label} - ${campaignSearch}`;
     }

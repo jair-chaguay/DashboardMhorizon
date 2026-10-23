@@ -15,6 +15,7 @@ import { downloadCsv } from '../utils/csv';
 import { toDayKey } from '../utils/dates';
 import { formatSize } from '../utils/files';
 import { parseTags } from '../utils/tags';
+import { isReplied, statusDot } from '../utils/status';
 import { confirmAction, notifyError, notifySuccess } from '../utils/notify';
 import { DELIVERED_FLAG, deliveryFlag, summarizeDeliverability } from '../utils/deliverability';
 
@@ -25,13 +26,12 @@ const faseOf = (lead) => lead.fase || 1;
 const estadoOf = (lead) => lead.status || 'Pendiente';
 // Para seguimiento: hizo clic en algún correo y todavía no ha respondido
 const SEGUIMIENTO = '__seguimiento';
-const needsFollowUp = (lead) => (lead.clicks || 0) > 0 && estadoOf(lead) !== 'Respondió';
+const needsFollowUp = (lead) => (lead.clicks || 0) > 0 && !isReplied(estadoOf(lead));
 const REBOTE = '__rebote';
 const BAJA = '__baja';
 const ACCION = '__accion';
 // Próxima acción con fecha de hoy o anterior (fecha en formato AAAA-MM-DD)
 const accionVencida = (lead, today) => !!lead.proxima_fecha && String(lead.proxima_fecha).slice(0, 10) <= today;
-const ESTADO_DOT = { 'Respondió': 'bg-emerald-500', Enviado: 'bg-navy-700', Pendiente: 'bg-slate-300' };
 
 export default function Audience() {
   const { leads, loading, fetchLeads, tags: etiquetasUnicas } = useLeads();
@@ -410,7 +410,7 @@ export default function Audience() {
                       </td>
                       <td className="py-2.5 px-5 text-slate-600 whitespace-nowrap hidden md:table-cell">Fase {faseOf(lead)}</td>
                       <td className="py-2.5 px-5 whitespace-nowrap hidden md:table-cell">
-                        <span className="inline-flex items-center gap-2 text-slate-600"><span className={`h-1.5 w-1.5 rounded-full ${ESTADO_DOT[estadoOf(lead)] || 'bg-slate-300'}`} />{estadoOf(lead)}</span>
+                        <span className="inline-flex items-center gap-2 text-slate-600"><span className={`h-1.5 w-1.5 rounded-full ${statusDot(estadoOf(lead))}`} />{estadoOf(lead)}</span>
                       </td>
                       <td className="py-2.5 px-5 whitespace-nowrap hidden md:table-cell">
                         {shownFlag ? <span className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${shownFlag.tone}`}>{shownFlag.label}</span> : <span className="text-slate-300">—</span>}

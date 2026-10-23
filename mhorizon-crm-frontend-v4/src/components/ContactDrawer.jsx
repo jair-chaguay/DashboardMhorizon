@@ -15,6 +15,8 @@ const EVENT_INFO = {
   spam: { icon: ShieldAlert, label: 'Marcó el correo como spam', tone: 'bg-rose-50 text-rose-600' },
 };
 const BOUNCE_TYPE = { hard: 'duro', duro: 'duro', soft: 'suave', suave: 'suave' };
+// Rechazos que registra el worker de Python: 'blocked' es permanente y 'failed' temporal
+const LEGACY_BOUNCE = { blocked: 'hard', failed: 'soft' };
 const eventLabel = (event) => {
   if (event.type === 'bounce' && BOUNCE_TYPE[event.bounceType]) return `El correo rebotó (${BOUNCE_TYPE[event.bounceType]})`;
   return EVENT_INFO[event.type].label;
@@ -66,8 +68,10 @@ export default function ContactDrawer({ lead, logs, loadingLogs, busy, flag, onC
   }, [email, onClose]);
 
   const events = useMemo(() => logs
-    .filter(log => log.email === email && EVENT_INFO[log.event_type])
-    .map(log => ({ type: log.event_type, campaign: log.campaign_name, url: log.url, bounceType: String(log.bounce_type || '').toLowerCase(), date: parseDate(log.created_at) }))
+    .filter(log => log.email === email && (EVENT_INFO[log.event_type] || LEGACY_BOUNCE[log.event_type]))
+    .map(log => LEGACY_BOUNCE[log.event_type]
+      ? { type: 'bounce', campaign: log.campaign_name, bounceType: LEGACY_BOUNCE[log.event_type], date: parseDate(log.created_at) }
+      : { type: log.event_type, campaign: log.campaign_name, url: log.url, bounceType: String(log.bounce_type || '').toLowerCase(), date: parseDate(log.created_at) })
     .filter(event => event.date)
     .sort((a, b) => b.date - a.date), [logs, email]);
 

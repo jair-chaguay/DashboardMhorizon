@@ -13,6 +13,7 @@ import { COLORS, ui } from '../utils/theme';
 import { useDashboardMetrics } from '../hooks/useDashboardMetrics';
 import { downloadCsv } from '../utils/csv';
 import { formatFechaHora, parseDate, toDayKey } from '../utils/dates';
+import { isReplied } from '../utils/status';
 
 const FASES = [1, 2, 3, 4, 5];
 const PAGE_SIZE = 25;
@@ -42,7 +43,7 @@ const TABS = [
 const NOTES = {
   abrieron: 'Quienes abrieron el correo al menos una vez, con el día y la hora de su primera apertura.',
   clic: 'Quienes tocaron un enlace. Son los contactos más interesados: conviene llamarlos o escribirles primero.',
-  respondieron: 'Contactos de esta campaña que están marcados como "Respondió" en la base de datos.',
+  respondieron: 'Contactos de esta campaña que respondieron (el agente IMAP conversa con ellos o los derivó al equipo).',
   noAbrieron: 'Exporta esta lista si quieres reenviarles el correo con otro asunto. No incluye a quienes rebotaron o se dieron de baja.',
   problemas: 'Correos que no llegaron o personas que pidieron no recibir más. No volver a escribirles.',
 };
@@ -98,7 +99,7 @@ function Report({ nombre }) {
     return Array.from(byEmail.values()).map(row => {
       const lead = leadByEmail.get(row.email);
       const flag = deliveryFlag(row.email, deliverability);
-      const replied = lead?.status === 'Respondió';
+      const replied = isReplied(lead?.status);
       return { ...row, fase: faseOf(lead), status: lead?.status || 'Pendiente', inCrm: !!lead, nombre: lead?.nombre || '', empresa: lead?.empresa || '', flag, problem: deliveryEvent(row.email, deliverability), replied };
     }).sort((a, b) => b.clicks - a.clicks || b.opens - a.opens || a.email.localeCompare(b.email));
   }, [filteredLogs, leads, deliverability]);

@@ -3,7 +3,12 @@
 //   bounce (con bounce_type 'hard' o 'soft'), unsubscribe y spam.
 // Si no llegan, todo queda en cero y las pantallas lo indican en vez de inventar datos.
 
+// El worker de Python registra los rechazos como 'blocked' (5xx / destinatario rechazado / rebote leído por IMAP)
+// y 'failed' (error temporal). Se leen como rebote duro y suave
+const LEGACY_BOUNCES = { blocked: 'hard', failed: 'soft' };
+
 const normalizeBounce = (log) => {
+  if (LEGACY_BOUNCES[log.event_type]) return LEGACY_BOUNCES[log.event_type];
   const type = String(log.bounce_type || '').toLowerCase();
   if (type === 'hard' || type === 'duro') return 'hard';
   if (type === 'soft' || type === 'suave') return 'soft';
@@ -16,11 +21,12 @@ export function summarizeDeliverability(logs) {
   const hard = new Set(), soft = new Set(), unknown = new Set(), unsub = new Set(), spam = new Set();
   const events = new Map();
   logs.forEach(log => {
-    if (!['bounce', 'unsubscribe', 'spam'].includes(log.event_type)) return;
-    if (log.event_type === 'bounce') ({ hard, soft, unknown })[normalizeBounce(log)].add(log.email);
+    const isBounce = log.event_type === 'bounce' || !!LEGACY_BOUNCES[log.event_type];
+    if (!isBounce && !['unsubscribe', 'spam'].includes(log.event_type)) return;
+    if (isBounce) ({ hard, soft, unknown })[normalizeBounce(log)].add(log.email);
     else if (log.event_type === 'unsubscribe') unsub.add(log.email);
     else spam.add(log.email);
-    const key = `${log.event_type}|${log.email}`;
+    const key = `${isBounce ? 'bounce' : log.event_type}|${log.email}`;
     const prev = events.get(key);
     if (!prev || String(log.created_at) > String(prev.created_at)) events.set(key, { created_at: log.created_at, reason: log.bounce_reason || '', campaign: log.campaign_name || '' });
   });

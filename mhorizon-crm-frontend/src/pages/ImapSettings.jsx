@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Power, Activity } from 'lucide-react';
+import { Power, Loader2 } from 'lucide-react';
 import api from '../api/api';
+import PageHeader from '../components/PageHeader';
 
 export default function ImapSettings() {
   const [activo, setActivo] = useState(false);
@@ -25,41 +26,30 @@ export default function ImapSettings() {
   };
 
   return (
-    <div className="p-8">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-         Agente IMAP (Respuestas Automáticas)
-      </h2>
+    <div>
+      <PageHeader description="Enciende o apaga la escucha de respuestas automáticas en la bandeja de entrada.">Agente IMAP</PageHeader>
 
-      <div className="max-w-2xl bg-white border border-gray-200 rounded-xl p-8 shadow-sm">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-6 mb-6">
-          <div>
-            <h3 className="text-lg font-bold text-gray-900">Estado del Servidor de Escucha</h3>
-            <p className="text-gray-500 text-sm mt-1">Supervisa la bandeja de entrada 24/7 para detectar interacciones.</p>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <span className={`flex h-3 w-3 rounded-full ${activo ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
-            <span className="font-bold text-sm text-gray-700">{activo ? 'EN LÍNEA' : 'APAGADO'}</span>
-          </div>
+      <section className="max-w-xl bg-white border border-slate-200/80 rounded-2xl p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-[15px] font-semibold text-slate-900">Estado del servidor de escucha</h3>
+          <span className={`inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-sm font-semibold transition-colors ${activo ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            <span className={`h-2 w-2 rounded-full ${activo ? 'bg-emerald-500' : 'bg-rose-500'}`} />{activo ? 'En línea' : 'Apagado'}
+          </span>
         </div>
 
-        <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 mb-6">
-          <ul className="text-sm text-gray-600 space-y-3">
-            <li className="flex items-center gap-2"><Activity size={16} className="text-blue-200"/> Clasifica intenciones (Positivo, Negativo, Duda).</li>
-            <li className="flex items-center gap-2"><Activity size={16} className="text-blue-200"/> Responde dudas basándose en la memoria del hilo.</li>
-            <li className="flex items-center gap-2"><Activity size={16} className="text-blue-200"/> Alerta al equipo corporativo ante prospectos calientes.</li>
-          </ul>
-        </div>
+        <p className="mt-4 text-sm leading-relaxed text-slate-600">
+          Supervisa la bandeja de entrada 24/7 para detectar interacciones: clasifica intenciones (positivo, negativo, duda), responde dudas basándose en la memoria del hilo y alerta al equipo corporativo ante prospectos calientes.
+        </p>
 
-        <button 
+        <button
           onClick={handleToggle}
           disabled={cargando}
-          className={`w-full py-4 rounded-lg font-bold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 ${activo ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' : 'bg-blue-200 text-white hover:bg-orange-500'}`}
+          className={`mt-5 w-full h-11 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${activo ? 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
         >
-          <Power size={20} />
-          {cargando ? 'Cambiando estado...' : activo ? 'DETENER AGENTE IMAP' : 'INICIAR AGENTE IMAP'}
+          {cargando ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />}
+          {cargando ? 'Cambiando estado...' : activo ? 'Detener agente IMAP' : 'Iniciar agente IMAP'}
         </button>
-      </div>
+      </section>
     </div>
   );
-} 
+}

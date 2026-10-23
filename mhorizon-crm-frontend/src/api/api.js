@@ -18,4 +18,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+const AUTH_ROUTES = ['/login', '/logout'];
+api.interceptors.response.use(
+  (response)=> response,
+  (error) =>{
+    if(error.response?.status === 401 && !AUTH_ROUTES.includes(error.config?.url)){
+      clearSession();
+      notifyAuthExpired();
+    }
+    return Promise.reject(error);
+  }
+)
+
 export default api;

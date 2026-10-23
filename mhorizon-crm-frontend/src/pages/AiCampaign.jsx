@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import {  PlayCircle, AlertCircle } from 'lucide-react';
+import { PlayCircle, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import api from '../api/api';
+import PageHeader from '../components/PageHeader';
 
 export default function AiCampaign() {
   const [isLaunching, setIsLaunching] = useState(false);
@@ -11,16 +12,16 @@ export default function AiCampaign() {
     setStatus(null);
     try {
       await api.post('/campaign/ia');
-      setStatus({ 
-        type: 'success', 
-        title: 'Campaña Iniciada', 
-        text: 'El motor de Inteligencia Artificial ha comenzado a procesar los prospectos. Puedes revisar los resultados en el Dashboard.' 
+      setStatus({
+        type: 'success',
+        title: 'Campaña Iniciada',
+        text: 'El motor de Inteligencia Artificial ha comenzado a procesar los prospectos. Puedes revisar los resultados en el Dashboard.'
       });
     } catch (error) {
-      setStatus({ 
-        type: 'error', 
-        title: 'Error de conexión', 
-        text: 'No se pudo comunicar con el servidor de Python para iniciar la campaña.' 
+      setStatus({
+        type: 'error',
+        title: 'Error de conexión',
+        text: 'No se pudo comunicar con el servidor de Python para iniciar la campaña.'
       });
       console.log(error)
     } finally {
@@ -29,36 +30,31 @@ export default function AiCampaign() {
   };
 
   return (
-    <div className="p-8">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-        Campaña IA Autónoma
-      </h2>
+    <div>
+      <PageHeader description="Deja que la IA prepare los correos del día según la fase de cada prospecto.">Campaña IA</PageHeader>
 
-      <div className="max-w-3xl bg-white border border-gray-200 rounded-xl p-8 shadow-sm">
-        <div className="flex items-start gap-6">
-          
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Motor de Prospección Inteligente</h3>
-            <p className="text-gray-600 text-sm leading-relaxed mb-6">
-              Al ejecutar esta acción, el sistema evaluará automáticamente en qué fase del embudo se encuentra cada prospecto. 
-              La IA redactará correos hiperpersonalizados basados en el historial y las reglas de la semana actual.
-            </p>
-            
-            <button 
-              onClick={handleLaunch}
-              disabled={isLaunching}
-              className="bg-orange-500 hover:bg-blue-200 duration-300 text-white font-bold py-3 px-8 rounded-lg shadow-lg flex items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {isLaunching ? 'Conectando con IA...' : <><PlayCircle size={20} /> Ejecutar Lote de Hoy</>}
-            </button>
-          </div>
-        </div>
+      <div className="max-w-3xl space-y-4">
+        <section className="bg-white border border-slate-200/80 rounded-2xl p-6">
+          <h3 className="text-[15px] font-semibold text-slate-900">Motor de prospección inteligente</h3>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-600 max-w-xl">
+            Al ejecutar esta acción, el sistema evaluará automáticamente en qué fase del embudo se encuentra cada prospecto.
+            La IA redactará correos hiperpersonalizados basados en el historial y las reglas de la semana actual.
+          </p>
+
+          <button
+            onClick={handleLaunch}
+            disabled={isLaunching}
+            className="mt-5 h-10 px-5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg flex items-center gap-2 transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {isLaunching ? <><Loader2 size={18} className="animate-spin" /> Conectando con IA...</> : <><PlayCircle size={19} /> Ejecutar lote de hoy</>}
+          </button>
+        </section>
 
         {status && (
-          <div className={`mt-8 p-4 rounded-lg border flex items-start gap-3 ${status.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-            <AlertCircle className="mt-0.5" size={18} />
+          <div role="status" className={`p-4 rounded-lg border flex items-start gap-3 animate-fade-up ${status.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>
+            {status.type === 'success' ? <CheckCircle2 className="mt-0.5 shrink-0" size={18} /> : <AlertCircle className="mt-0.5 shrink-0" size={18} />}
             <div>
-              <h4 className="font-bold text-sm">{status.title}</h4>
+              <h4 className="font-semibold text-sm">{status.title}</h4>
               <p className="text-sm mt-1">{status.text}</p>
             </div>
           </div>

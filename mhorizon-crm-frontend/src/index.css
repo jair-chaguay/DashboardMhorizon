@@ -1,10 +1,80 @@
 @import "tailwindcss";
 
-body {
-  background-color: #f3f4f6;
-}
+/* Paleta MHORIZON: naranja de marca (brand), azul oscuro (navy) y azul corporativo */
 @theme {
-  --color-blue-200: #171E27;
-  --color-orange-500: #D4681C;
-  --color-blue-100: #0A2C5E;
+  --color-brand-50: #fdf4ec;
+  --color-brand-100: #fbe5d0;
+  --color-brand-200: #f5c8a0;
+  --color-brand-500: #e07c34;
+  --color-brand-600: #d4681c;
+  --color-brand-700: #b4560f;
+  --color-navy-900: #171e27;
+  --color-navy-800: #212b38;
+  --color-navy-700: #0a2c5e;
+  --color-navy-50: #eef2f8;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Esquinas más rectas que las de Tailwind por defecto (tarjetas 10 px, botones y campos 6-8 px) */
+  --radius-md: 0.25rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.625rem;
+
+  /* Animaciones sutiles: entrada de páginas y tarjetas, ventanas, barras que crecen */
+  --animate-fade-in: fade-in 0.25s ease-out backwards;
+  --animate-fade-up: fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  --animate-pop: pop-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  --animate-slide-down: slide-down 0.25s ease-out backwards;
+  --animate-slide-in: slide-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  --animate-bar: bar-grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes pop-in { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes slide-down { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  @keyframes slide-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+  @keyframes bar-grow { from { width: 0; } }
+}
+
+body {
+  background-color: #f4f5f7;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 0;
+}
+
+/* Foco visible para quien navega con teclado; los campos que ya tienen su propio anillo lo conservan */
+@layer base {
+  :where(a, button, summary, select, input, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+  }
+}
+
+/* Editor de correo (Quill) con el estilo de las tarjetas */
+.editor-body .ql-toolbar.ql-snow {
+  border-color: #e2e8f0;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: #f8fafc;
+}
+.editor-body .ql-container.ql-snow {
+  border-color: #e2e8f0;
+  border-radius: 0 0 0.5rem 0.5rem;
+  font-family: inherit;
+  font-size: 14px;
+  height: 18rem;
+}
+
+/* Respuesta al pulsar un botón */
+button:not(:disabled):active {
+  scale: 0.97;
+}
+
+/* Quien tiene activado "reducir movimiento" en su equipo no ve animaciones */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
