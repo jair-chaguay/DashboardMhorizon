@@ -20,11 +20,11 @@ export async function confirmAction({ title, text, confirmText = 'Sí, continuar
 }
 
 // Pide un texto corto (por ejemplo, el nombre de una plantilla). Devuelve null si cancela
-export async function promptText({ title, placeholder = '', confirmText = 'Guardar' }) {
+export async function promptText({ title, text, placeholder = '', confirmText = 'Guardar', initialValue = '', allowEmpty = false }) {
   const result = await Swal.fire({
-    title, input: 'text', inputPlaceholder: placeholder, showCancelButton: true,
+    title, text, input: 'text', inputValue: initialValue, inputPlaceholder: placeholder, showCancelButton: true,
     confirmButtonText: confirmText, cancelButtonText: 'Cancelar', confirmButtonColor: BRAND_COLOR, reverseButtons: true,
-    inputValidator: (value) => (value.trim() ? null : 'Escribe un nombre'),
+    inputValidator: (value) => (allowEmpty || value.trim() ? null : 'Escribe un nombre'),
   });
   return result.isConfirmed ? result.value.trim() : null;
 }

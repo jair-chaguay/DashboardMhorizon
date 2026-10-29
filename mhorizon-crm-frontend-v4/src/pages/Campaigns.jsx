@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Search, ArrowUpDown, RefreshCw, GitCompare, X, Download, ChevronRight } from 'lucide-react';
+import { Search, ArrowUpDown, RefreshCw, GitCompare, X, Download, ChevronRight, Pencil } from 'lucide-react';
 import Modal from '../components/Modal';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
@@ -11,10 +11,21 @@ import { LegendDot, Panel, RateBar, Stat, StatGrid } from '../components/analyti
 import { downloadCsv } from '../utils/csv';
 import { toDayKey } from '../utils/dates';
 import { COLORS, axisTick, selectClass, tooltipStyle, ui } from '../utils/theme';
+import { notifyError, promptText } from '../utils/notify';
 import { useDashboardMetrics } from '../hooks/useDashboardMetrics';
 
 const ITEMS_PER_PAGE = 20;
 const MAX_COMPARE = 4;
+const NAME_MODE_KEY = 'campanas_modo_nombre';
+
+const NAME_MODES = [
+  ['alias', 'Provisional'],
+  ['original', 'Original'],
+];
+
+function loadNameMode() {
+  try { return window.localStorage.getItem(NAME_MODE_KEY) === 'original' ? 'original' : 'alias'; } catch { return 'alias'; }
+}
 
 const COMPARE_ROWS = [
   ['sent', 'Destinatarios', (v) => v],
@@ -35,23 +46,48 @@ const COLUMNS = [
 ];
 
 const sortValue = (camp, key) => {
-  if (key === 'name') return camp.name.toLowerCase();
+  if (key === 'name') return camp.displayName.toLowerCase();
   if (key === 'lastDate') return camp.lastDate?.getTime() || 0;
   return Number(camp[key]) || 0;
 };
 
 export default function Campaigns() {
   const navigate = useNavigate();
-  const { loading, error, fetchData, campaignsSummary } = useDashboardMetrics();
+  const { loading, error, fetchData, campaignsSummary: rawSummary, saveCampaignAlias } = useDashboardMetrics();
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState({ key: 'lastDate', dir: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [selected, setSelected] = useState([]);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [nameMode, setNameMode] = useState(loadNameMode);
+
+  const changeNameMode = (mode) => {
+    setNameMode(mode);
+    try { window.localStorage.setItem(NAME_MODE_KEY, mode); } catch { /* sin almacenamiento */ }
+  };
+
+  // El nombre provisional solo cambia lo que se ve; camp.name sigue identificando la campaña
+  const campaignsSummary = useMemo(() => rawSummary.map(c => ({
+    ...c, displayName: nameMode === 'alias' && c.alias ? c.alias : c.name,
+  })), [rawSummary, nameMode]);
+
+  const editAlias = async (camp) => {
+    const alias = await promptText({
+      title: 'Nombre provisional', text: `Original: ${camp.name}. Déjalo vacío para quitarlo.`,
+      placeholder: 'Ej. Promo noviembre', initialValue: camp.alias, allowEmpty: true,
+    });
+    if (alias === null || alias === camp.alias) return;
+    try {
+      await saveCampaignAlias(camp.name, alias);
+    } catch (err) {
+      console.error('Error guardando el nombre provisional: ', err);
+      notifyError('No se pudo guardar el nombre provisional.');
+    }
+  };
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const filtered = campaignsSummary.filter(c => c.name.toLowerCase().includes(term));
+    const filtered = campaignsSummary.filter(c => [c.name, c.alias, c.subject].some(v => v?.toLowerCase().includes(term)));
     const dir = sort.dir === 'asc' ? 1 : -1;
     return [...filtered].sort((a, b) => {
       const va = sortValue(a, sort.key), vb = sortValue(b, sort.key);
@@ -82,8 +118,8 @@ export default function Campaigns() {
   const columns = COLUMNS.filter(col => !col.delivery || hasDelivery);
 
   const exportCsv = () => downloadCsv(`campanas-${toDayKey(new Date())}.csv`, [
-    ['Campaña', 'Asunto', 'Último movimiento', 'Destinatarios', 'Entregados', 'Apertura (%)', 'Clics (%)', 'CTOR (%)', 'Rebotes duros', 'Rebotes suaves', 'Desuscritos', 'Spam', 'Respondieron'],
-    ...rows.map(c => [c.name, c.subject, c.dateStr, c.sent, c.delivered, c.openRate, c.clickRate, c.ctor, c.hardBounces, c.softBounces, c.unsubscribed, c.spam, c.replies]),
+    ['Campaña', 'Nombre provisional', 'Asunto', 'Último movimiento', 'Destinatarios', 'Entregados', 'Apertura (%)', 'Clics (%)', 'CTOR (%)', 'Rebotes duros', 'Rebotes suaves', 'Desuscritos', 'Spam', 'Respondieron'],
+    ...rows.map(c => [c.name, c.alias, c.subject, c.dateStr, c.sent, c.delivered, c.openRate, c.clickRate, c.ctor, c.hardBounces, c.softBounces, c.unsubscribed, c.spam, c.replies]),
   ]);
 
   const openReport = (name) => navigate(`/campanas/${encodeURIComponent(name)}`);
@@ -91,14 +127,18 @@ export default function Campaigns() {
   // Tendencia: apertura y clics de cada campaña en el orden en que se enviaron
   const trend = useMemo(() => [...campaignsSummary]
     .sort((a, b) => (a.lastDate?.getTime() || 0) - (b.lastDate?.getTime() || 0))
-    .map(c => ({ name: c.name, apertura: Number(c.openRate), clics: Number(c.clickRate) })), [campaignsSummary]);
+    .map(c => ({ name: c.displayName, apertura: Number(c.openRate), clics: Number(c.clickRate) })), [campaignsSummary]);
 
   return (
     <div className="space-y-5">
-      <PageHeader description="Todos tus envíos con sus resultados. Pulsa una campaña para ver su reporte."
+      <PageHeader description="Todos tus envíos con sus resultados. Pulsa una campaña para ver su reporte, o márcala y usa «Cambiar nombre» para ponerle un nombre provisional."
         actions={<>
           <button onClick={fetchData} disabled={loading} title="Actualizar datos" aria-label="Actualizar datos" className={ui.iconBtn}>
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={() => editAlias(compared[0])} disabled={selected.length !== 1}
+            title={selected.length !== 1 ? 'Marca una campaña en la tabla para cambiarle el nombre' : 'Cambiar el nombre provisional de la campaña marcada'} className={ui.btn}>
+            <Pencil size={16} /> Cambiar nombre
           </button>
           <button onClick={() => setCompareOpen(true)} disabled={selected.length < 2}
             title={selected.length < 2 ? 'Marca al menos 2 campañas en la tabla' : 'Comparar las campañas marcadas'} className={ui.btn}>
@@ -158,6 +198,18 @@ export default function Campaigns() {
             <option value="sent:desc">Más destinatarios</option>
             <option value="name:asc">Nombre (A-Z)</option>
           </select>
+          <div className="inline-flex items-center gap-2 text-[13px] text-slate-500">
+            Ver nombre
+            <div role="group" aria-label="Qué nombre mostrar" className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+              {NAME_MODES.map(([mode, label]) => (
+                <button key={mode} onClick={() => changeNameMode(mode)} aria-pressed={nameMode === mode}
+                  title={mode === 'alias' ? 'Muestra el nombre provisional cuando la campaña tenga uno' : 'Muestra el nombre con el que llegó la campaña'}
+                  className={`px-3 h-8 rounded-md text-sm font-semibold cursor-pointer transition-colors ${nameMode === mode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -183,8 +235,18 @@ export default function Campaigns() {
                       disabled={!selected.includes(camp.name) && selected.length >= MAX_COMPARE} className="h-4 w-4 rounded accent-brand-600 cursor-pointer disabled:cursor-not-allowed" />
                   </td>
                   <td className="py-3 px-5 min-w-48">
-                    <span className="font-semibold text-slate-900 group-hover:text-brand-700">{camp.name}</span>
-                    {camp.subject && <span className="block max-w-64 truncate text-xs text-slate-500" title={camp.subject}>{camp.subject}</span>}
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-semibold text-slate-900 group-hover:text-brand-700">{camp.displayName}</span>
+                      <button onClick={(e) => { e.stopPropagation(); editAlias(camp); }} aria-label={`Cambiar nombre provisional de ${camp.name}`}
+                        title={camp.alias ? 'Cambiar nombre provisional' : 'Poner nombre provisional'}
+                        className="h-6 w-6 inline-grid place-items-center rounded text-slate-400 hover:text-brand-700 hover:bg-slate-100 cursor-pointer"><Pencil size={14} /></button>
+                    </span>
+                    {camp.alias && (
+                      <span className="block max-w-64 truncate text-xs text-slate-400" title={nameMode === 'alias' ? camp.name : camp.alias}>
+                        {nameMode === 'alias' ? `Original: ${camp.name}` : `Provisional: ${camp.alias}`}
+                      </span>
+                    )}
+                    {camp.subject && camp.subject !== camp.displayName && <span className="block max-w-64 truncate text-xs text-slate-500" title={camp.subject}>{camp.subject}</span>}
                   </td>
                   <td className="py-3 px-5 whitespace-nowrap">
                     <span className="text-slate-700">{camp.dateStr}</span>
@@ -240,7 +302,7 @@ export default function Campaigns() {
             <thead>
               <tr className="text-left">
                 <th className="pb-3 pr-4 w-32" />
-                {compared.map(c => <th key={c.name} className="pb-3 px-3 font-semibold text-slate-900 align-bottom">{c.name}<span className="block text-xs font-normal text-slate-500">{c.dateStr}</span></th>)}
+                {compared.map(c => <th key={c.name} className="pb-3 px-3 font-semibold text-slate-900 align-bottom">{c.displayName}<span className="block text-xs font-normal text-slate-500">{c.dateStr}</span></th>)}
               </tr>
             </thead>
             <tbody>

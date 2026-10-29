@@ -37,7 +37,7 @@ function countEventsByEmail(logs) {
 }
 
 export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos') => {
-  const [data, setData] = useState({ leads: [], linkClicks: [], emailLogs: [] });
+  const [data, setData] = useState({ leads: [], linkClicks: [], emailLogs: [], campaignAliases: {} });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [campaignSearch, setCampaignSearch] = useState(initialCampaign);
@@ -54,7 +54,8 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
       setData({
         leads: res?.leads || [],
         linkClicks: res?.link_clicks || [],
-        emailLogs: res?.email_logs || []
+        emailLogs: res?.email_logs || [],
+        campaignAliases: res?.campaign_aliases || {}
       });
     } catch (err) {
       console.error("Error conectando a Laravel: ", err);
@@ -281,14 +282,25 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
       const clickRate = delivered > 0 ? ((camp.uniqueClicks.size / delivered) * 100).toFixed(1) : 0;
       const ctor = camp.uniqueOpens.size > 0 ? ((camp.uniqueClicks.size / camp.uniqueOpens.size) * 100).toFixed(1) : 0;
       return {
-        ...camp, openRate, clickRate, ctor, dateStr: formatDateTime(camp.lastDate),
+        ...camp, alias: data.campaignAliases[camp.name] || '', openRate, clickRate, ctor, dateStr: formatDateTime(camp.lastDate),
         delivered, bounces: d.bounces, hardBounces: d.hard.size + d.unknown.size, softBounces: d.soft.size, hasBounceTypes: d.hasBounceTypes,
         unsubscribed: d.unsub.size, spam: d.spam.size,
         openCount: camp.uniqueOpens.size, clickCount: camp.uniqueClicks.size,
         replies: [...camp.recipients].filter(e => isReplied(leadByEmail.get(e)?.status)).length,
       };
     }).sort((a, b) => (b.lastDate?.getTime() || 0) - (a.lastDate?.getTime() || 0));
-  }, [data.emailLogs, data.leads]);
+  }, [data.emailLogs, data.leads, data.campaignAliases]);
+
+  // Nombre provisional de una campaña (vacío lo quita). campaign_name no cambia
+  const saveCampaignAlias = useCallback(async (name, alias) => {
+    const { data: res } = await api.post('/campaign/alias', { campaign_name: name, alias });
+    setData(prev => {
+      const campaignAliases = { ...prev.campaignAliases };
+      if (res?.alias) campaignAliases[name] = res.alias;
+      else delete campaignAliases[name];
+      return { ...prev, campaignAliases };
+    });
+  }, []);
 
   const openDetails = useCallback((type) => {
     const affectedEmails = new Set();
@@ -371,7 +383,7 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
   return {
     leads: data.leads, loading, error, lastUpdated, fetchData, campaignSearch, setCampaignSearch, dateFilter, setDateFilter,
     uniqueCampaigns, filteredLogs, deliverability, isGlobalView, metrics, funnelData, crmFunnelData, linkInsights, deviceBreakdown,
-    timeSeriesData, hourlyActivityData, campaignsSummary, hotLeads, recentEvents,
+    timeSeriesData, hourlyActivityData, campaignsSummary, saveCampaignAlias, hotLeads, recentEvents,
     modalDetails, openDetails, closeDetails
   };
 };
