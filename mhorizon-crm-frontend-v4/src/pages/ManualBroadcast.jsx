@@ -530,7 +530,7 @@ export default function ManualBroadcast() {
                   <button type="button" onClick={() => setEditorAbierto(true)} className={`${ui.btnPrimary} h-9`}><PencilLine size={15} /> Abrir editor</button>
                 </div>
                 <button type="button" onClick={() => setEditorAbierto(true)} aria-label="Abrir editor" className="block w-full cursor-pointer">
-                  <iframe title="Miniatura del correo" sandbox="" srcDoc={previewDoc} tabIndex={-1} className="pointer-events-none block h-[26rem] w-full rounded-b-lg bg-white" />
+                  <iframe title="Miniatura del correo" sandbox="" srcDoc={previewDoc} tabIndex={-1} className="pointer-events-none block h-104 w-full rounded-b-lg bg-white" />
                 </button>
               </div>
             )}
@@ -551,7 +551,7 @@ export default function ManualBroadcast() {
                   : (
                     <div className="flex justify-center rounded-lg bg-slate-100 p-3 sm:p-5">
                       <iframe title="Vista previa del correo" sandbox="" srcDoc={previewDoc}
-                        className={`${esCampana ? 'h-[36rem]' : 'h-80'} max-w-full rounded-lg border border-slate-200 bg-white transition-[width] duration-300 ${dispositivo === 'movil' ? 'w-[375px]' : (esCampana ? 'w-[648px]' : 'w-[640px]')}`} />
+                        className={`${esCampana ? 'h-144' : 'h-80'} max-w-full rounded-lg border border-slate-200 bg-white transition-[width] duration-300 ${dispositivo === 'movil' ? 'w-93.75' : (esCampana ? 'w-162' : 'w-160')}`} />
                     </div>
                   )}
               </div>
@@ -593,7 +593,7 @@ export default function ManualBroadcast() {
               </div>
               <div className="flex items-start justify-between gap-4">
                 <dt className="text-slate-500">Asunto</dt>
-                <dd className="font-medium text-slate-900 text-right truncate max-w-[12rem]">{asunto || '—'}</dd>
+                <dd className="font-medium text-slate-900 text-right truncate max-w-48">{asunto || '—'}</dd>
               </div>
               <div className="flex items-center justify-between">
                 <dt className="text-slate-500">Adjuntos</dt>
