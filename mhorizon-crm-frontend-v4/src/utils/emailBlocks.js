@@ -31,6 +31,18 @@ const redesHtml = (redes = {}) => REDES.map(([key, nombre]) => {
   return href ? `<a href="${esc(href)}" target="_blank" style="display:inline-block;margin:0 5px;text-decoration:none"><img src="${EMAIL_ASSETS.redes[key]}" alt="${nombre}" width="36" height="36" style="display:block;width:36px;height:36px;border:0"></a>` : '';
 }).join('');
 
+// Darse de baja: va siempre en el pie. El worker cambia {{enlace_baja}} por el enlace de cada destinatario
+// (/track/unsubscribe?email=...), que lo saca de los envíos y le pone la etiqueta "Desuscrito" (ver BACKEND.md)
+export const ENLACE_BAJA = '{{enlace_baja}}';
+export const BAJA_BASE = { bajaTexto: 'Si ya no deseas recibir nuestros correos, puedes', bajaBoton: 'darte de baja aquí' };
+// Discreto: una línea pequeña y gris con el enlace subrayado, sin botón
+const bajaHtml = (b) => {
+  const texto = String(b.bajaTexto ?? BAJA_BASE.bajaTexto).trim();
+  const etiqueta = String(b.bajaBoton || '').trim() || BAJA_BASE.bajaBoton;
+  const enlace = `<a href="${ENLACE_BAJA}" target="_blank" style="color:${C.muted};text-decoration:underline">${esc(etiqueta)}</a>`;
+  return `<p style="margin:10px 0 0;font:11px/1.6 ${FONT};color:${C.muted}">${texto ? `${conSaltos(texto)} ` : ''}${enlace}.</p>`;
+};
+
 const RENDER = {
   imagen: (b, m) => {
     const src = imagenSegura(b.imagen);
@@ -77,6 +89,7 @@ const RENDER = {
       b.copyright && `<p style="margin:18px 0 6px;font:italic 12px/1.6 ${FONT};color:${C.text}">${conSaltos(b.copyright)}</p>`,
       b.mensaje && `<p style="margin:0 0 6px;font:12px/1.6 ${FONT};color:${C.text}">${conSaltos(b.mensaje)}</p>`,
       b.direccion && `<p style="margin:14px 0 0;font:12px/1.6 ${FONT};color:${C.text}">${conSaltos(b.direccion)}</p>`,
+      bajaHtml(b),
     ].filter(Boolean).join('');
     return fila('<div style="text-align:center">'
       + (botones ? `<div style="padding-bottom:18px">${botones}</div>` : '')
@@ -90,14 +103,11 @@ const RENDER = {
 
 export const renderBloque = (bloque, estilos = ESTILOS_BASE) => (RENDER[bloque.tipo] ? RENDER[bloque.tipo](bloque, Number(estilos.margen) || 0) : '');
 
-// Correo completo: fondo exterior, columna blanca de 600 px y el texto de vista previa oculto
-export function renderCorreo(bloques, { vistaPrevia = '', estilos = ESTILOS_BASE } = {}) {
+// Correo completo: fondo exterior y columna blanca de 600 px
+export function renderCorreo(bloques, { estilos = ESTILOS_BASE } = {}) {
   const fondo = estilos.fondo || ESTILOS_BASE.fondo;
-  const preheader = vistaPrevia.trim()
-    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:${fondo}">${esc(vistaPrevia)}</div>`
-    : '';
   const cuerpo = bloques.map(b => renderBloque(b, estilos)).join('');
-  return `<div style="margin:0;padding:32px 0;background:${fondo}">${preheader}${tabla(`<tr><td align="center" style="padding:0 12px"><table role="presentation" width="${ANCHO_CORREO}" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:${ANCHO_CORREO}px;background:#ffffff">${cuerpo ? `<tr><td>${cuerpo}</td></tr>` : ''}</table></td></tr>`)}</div>`;
+  return `<div style="margin:0;padding:32px 0;background:${fondo}">${tabla(`<tr><td align="center" style="padding:0 12px"><table role="presentation" width="${ANCHO_CORREO}" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:${ANCHO_CORREO}px;background:#ffffff">${cuerpo ? `<tr><td>${cuerpo}</td></tr>` : ''}</table></td></tr>`)}</div>`;
 }
 
 // Bloques que se pueden agregar, con sus valores iniciales (mismos nombres que en Mailchimp)
@@ -120,6 +130,7 @@ export const TIPOS_BLOQUE = [
       botonUrl: '',
       copyright: `Copyright (C) ${new Date().getFullYear()} MHORIZON-ECUADOR S.A. Todos los derechos reservados.`,
       mensaje: 'Has recibido este correo electrónico porque estás en nuestra base de datos.',
+      ...BAJA_BASE,
       direccion: 'MHORIZON-ECUADOR S.A. - Carchi y Quisquis, Guayaquil - 090301 Ecuador',
     },
   },

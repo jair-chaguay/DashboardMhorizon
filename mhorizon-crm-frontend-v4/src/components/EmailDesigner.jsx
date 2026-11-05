@@ -9,7 +9,7 @@ import { formatSize } from '../utils/files';
 import { leerImagen, pesoDataUrl, TIPOS_IMAGEN } from '../utils/images';
 import { EMAIL_ASSETS } from '../utils/emailAssets';
 import {
-  ANCHO_CORREO, TIPOS_BLOQUE, NOMBRE_TIPO, FONDOS, MARGENES, REDES, crearBloque, duplicarBloque, renderBloque, esIncrustada, imagenSegura,
+  ANCHO_CORREO, TIPOS_BLOQUE, NOMBRE_TIPO, FONDOS, MARGENES, REDES, crearBloque, duplicarBloque, renderBloque, esIncrustada, imagenSegura, BAJA_BASE,
 } from '../utils/emailBlocks';
 
 const ICONO = {
@@ -267,7 +267,11 @@ function EditorBloque({ bloque, cambiar, onRecortar }) {
             <Campo label="Derechos reservados"><Area value={bloque.copyright} onChange={set('copyright')} rows={2} label="Derechos reservados" /></Campo>
             <Campo label="Por qué lo recibe"><Area value={bloque.mensaje} onChange={set('mensaje')} rows={2} label="Por qué lo recibe" /></Campo>
             <Campo label="Dirección"><Area value={bloque.direccion} onChange={set('direccion')} rows={2} label="Dirección" /></Campo>
-            <p className="text-xs text-slate-500">El enlace para darse de baja lo agrega el servidor al final de cada correo.</p>
+          </Seccion>
+          <Seccion titulo="Darse de baja">
+            <Campo label="Texto"><Area value={bloque.bajaTexto ?? BAJA_BASE.bajaTexto} onChange={set('bajaTexto')} rows={2} label="Texto para darse de baja" /></Campo>
+            <Texto value={bloque.bajaBoton ?? BAJA_BASE.bajaBoton} onChange={set('bajaBoton')} label="Texto del enlace" placeholder={BAJA_BASE.bajaBoton} />
+            <p className="text-xs text-slate-500">Va siempre al final del pie, en letra pequeña. El enlace lo pone el servidor para cada persona: quien se da de baja sale de la cola de envíos y su etiqueta pasa a ser «Desuscrito».</p>
           </Seccion>
         </>
       );
