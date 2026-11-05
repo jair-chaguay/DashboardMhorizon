@@ -80,7 +80,6 @@ function leerBorrador() {
       formato: data.formato === 'campana' ? 'campana' : 'personal',
       bloques: bloquesValidos(data.bloques),
       estilos: estilosValidos(data.estilos),
-      vistaPrevia: typeof data.vistaPrevia === 'string' ? data.vistaPrevia : '',
     };
   } catch {
     return null;
@@ -135,7 +134,7 @@ const Selector = ({ opciones, valor, onChange }) => (
   </div>
 );
 // En campaña no hay plantillas armadas: se parte del pie de página y el contenido lo pone cada quien
-const DISENO_NUEVO = [{ id: 'nuevo', nombre: 'Empezar de cero (solo el pie)', asunto: '', vistaPrevia: '', bloques: correoNuevo }];
+const DISENO_NUEVO = [{ id: 'nuevo', nombre: 'Empezar de cero (solo el pie)', asunto: '', bloques: correoNuevo }];
 const VISTAS = [['editar', PencilLine, 'Editar'], ['previa', Eye, 'Vista previa']];
 const DISPOSITIVOS = [['escritorio', Monitor, 'Escritorio'], ['movil', Smartphone, 'Móvil']];
 
@@ -156,7 +155,6 @@ export default function ManualBroadcast() {
   // Dos formatos: "personal" (editor de texto, parece escrito a mano) y "campana" (bloques con diseño)
   const [formato, setFormato] = useState(borrador?.formato ?? 'personal');
   const [bloques, setBloques] = useState(borrador?.bloques ?? []);
-  const [vistaPrevia, setVistaPrevia] = useState(borrador?.vistaPrevia ?? '');
   const [estilos, setEstilos] = useState(borrador?.estilos ?? estilosValidos());
   const [editorAbierto, setEditorAbierto] = useState(false);
   const [borradorFallo, setBorradorFallo] = useState(false);
@@ -178,12 +176,12 @@ export default function ManualBroadcast() {
     if (primerRender.current) { primerRender.current = false; return; }
     const timer = setTimeout(() => {
       if (asunto === '' && isEmptyBody(cuerpo) && bloques.length === 0) { borrarBorrador(); setGuardadoA(null); return; }
-      const ok = guardarBorrador({ asunto, cuerpo, nombreCampana, etiquetas: selectedTags, formato, bloques, vistaPrevia, estilos });
+      const ok = guardarBorrador({ asunto, cuerpo, nombreCampana, etiquetas: selectedTags, formato, bloques, estilos });
       setBorradorFallo(!ok);
       if (ok) setGuardadoA(new Date());
     }, 600);
     return () => clearTimeout(timer);
-  }, [asunto, cuerpo, nombreCampana, selectedTags, formato, bloques, vistaPrevia, estilos]);
+  }, [asunto, cuerpo, nombreCampana, selectedTags, formato, bloques, estilos]);
 
   // Público: los prospectos activos que tengan al menos una de las etiquetas
   const publico = useMemo(() => leads.filter(l => {
@@ -213,10 +211,10 @@ export default function ManualBroadcast() {
 
   const esCampana = formato === 'campana';
   // Lo que se envía: el HTML del editor o el correo armado con los bloques
-  const htmlCorreo = useMemo(() => (esCampana ? renderCorreo(bloques, { vistaPrevia, estilos }) : cuerpo), [esCampana, bloques, vistaPrevia, estilos, cuerpo]);
+  const htmlCorreo = useMemo(() => (esCampana ? renderCorreo(bloques, { estilos }) : cuerpo), [esCampana, bloques, estilos, cuerpo]);
   const cuerpoVacio = esCampana ? bloques.length === 0 : isEmptyBody(cuerpo);
   const textoCuerpo = useMemo(() => (esCampana ? textoBloques(bloques) : htmlToText(cuerpo)), [esCampana, bloques, cuerpo]);
-  const snippet = (esCampana && vistaPrevia.trim() ? vistaPrevia : textoCuerpo).replace(/\s+/g, ' ').trim().slice(0, 90);
+  const snippet = textoCuerpo.replace(/\s+/g, ' ').trim().slice(0, 90);
   const enlaces = (htmlCorreo.match(/<a\s[^>]*href="(https?:|mailto:|tel:)/gi) || []).length;
   const pesoKb = Math.round(new Blob([sinImagenesIncrustadas(htmlCorreo)]).size / 1024);
   const diseno = useMemo(() => revisarBloques(bloques), [bloques]);
@@ -268,7 +266,6 @@ export default function ManualBroadcast() {
     setNombreCampana('');
     setSelectedTags([]);
     setBloques([]);
-    setVistaPrevia('');
     setEstilos(estilosValidos());
     setRestaurado(false);
     setGuardadoA(null);
@@ -287,7 +284,6 @@ export default function ManualBroadcast() {
       setFormato('campana');
       setBloques(lista);
       setEstilos(estilosValidos(plantilla.estilos));
-      setVistaPrevia(plantilla.vistaPrevia || '');
     } else {
       setFormato('personal');
       setCuerpo(plantilla.cuerpo);
@@ -304,7 +300,7 @@ export default function ManualBroadcast() {
     }
     const nombre = await promptText({ title: 'Guardar como plantilla', placeholder: 'Nombre de la plantilla' });
     if (!nombre) return;
-    const datos = esCampana ? { formato, bloques, vistaPrevia, estilos } : { cuerpo };
+    const datos = esCampana ? { formato, bloques, estilos } : { cuerpo };
     const lista = [...plantillas, { id: `usuario-${new Date().getTime()}`, nombre, asunto, ...datos }];
     if (!guardarPlantillas(lista)) {
       setMessage({ type: 'error', text: 'No se pudo guardar: las imágenes del diseño no caben en el almacenamiento de este navegador.' });
@@ -366,7 +362,6 @@ export default function ManualBroadcast() {
       setNombreCampana('');
       setSelectedTags([]);
       setBloques([]);
-      setVistaPrevia('');
       setArchivos([]);
       setRestaurado(false);
       setVista('editar');
@@ -514,15 +509,6 @@ export default function ManualBroadcast() {
               placeholder="Ej. Propuesta exclusiva para tu empresa"
             />
             {asuntoLargo && <p className="text-xs text-amber-600 mt-1.5">Los asuntos de más de {ASUNTO_IDEAL} caracteres se cortan en muchos celulares.</p>}
-
-            {esCampana && (
-              <div className="mt-5">
-                <label htmlFor="vista-previa" className={`${ui.label} block mb-2`}>Texto de vista previa <span className="font-normal text-slate-500">(opcional)</span></label>
-                <input id="vista-previa" type="text" maxLength={150} value={vistaPrevia} onChange={(e) => setVistaPrevia(e.target.value)}
-                  className={`${ui.input} w-full`} placeholder="Ej. Fechas máximas de declaraciones y anexos del mes" />
-                <p className="text-xs text-slate-500 mt-1.5">La línea gris que se ve junto al asunto en la bandeja de entrada.</p>
-              </div>
-            )}
 
             <div className="flex flex-wrap items-center justify-between gap-2 mt-5 mb-2">
               <span className={ui.label}>{esCampana ? 'Diseño del correo' : 'Cuerpo del correo'}</span>
