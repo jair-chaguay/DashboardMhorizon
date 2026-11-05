@@ -37,7 +37,7 @@ function countEventsByEmail(logs) {
 }
 
 export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos') => {
-  const [data, setData] = useState({ leads: [], linkClicks: [], emailLogs: [], campaignAliases: {} });
+  const [data, setData] = useState({ leads: [], linkClicks: [], emailLogs: [], campaignAliases: {}, campaignTypes: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [campaignSearch, setCampaignSearch] = useState(initialCampaign);
@@ -55,7 +55,10 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
         leads: res?.leads || [],
         linkClicks: res?.link_clicks || [],
         emailLogs: res?.email_logs || [],
-        campaignAliases: res?.campaign_aliases || {}
+        campaignAliases: res?.campaign_aliases || {},
+        // Campañas de Difusión manual ({ asunto: 'personal' | 'campana' }); las demás son de la secuencia de la IA.
+        // null si el servidor aún no lo envía
+        campaignTypes: res?.campaign_types || null
       });
     } catch (err) {
       console.error("Error conectando a Laravel: ", err);
@@ -282,14 +285,15 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
       const clickRate = delivered > 0 ? ((camp.uniqueClicks.size / delivered) * 100).toFixed(1) : 0;
       const ctor = camp.uniqueOpens.size > 0 ? ((camp.uniqueClicks.size / camp.uniqueOpens.size) * 100).toFixed(1) : 0;
       return {
-        ...camp, alias: data.campaignAliases[camp.name] || '', openRate, clickRate, ctor, dateStr: formatDateTime(camp.lastDate),
+        ...camp, alias: data.campaignAliases[camp.name] || '', openRate,
+        tipo: data.campaignTypes ? (data.campaignTypes[camp.name] ? 'manual' : 'ia') : null, formato: data.campaignTypes?.[camp.name] || null, clickRate, ctor, dateStr: formatDateTime(camp.lastDate),
         delivered, bounces: d.bounces, hardBounces: d.hard.size + d.unknown.size, softBounces: d.soft.size, hasBounceTypes: d.hasBounceTypes,
         unsubscribed: d.unsub.size, spam: d.spam.size,
         openCount: camp.uniqueOpens.size, clickCount: camp.uniqueClicks.size,
         replies: [...camp.recipients].filter(e => isReplied(leadByEmail.get(e)?.status)).length,
       };
     }).sort((a, b) => (b.lastDate?.getTime() || 0) - (a.lastDate?.getTime() || 0));
-  }, [data.emailLogs, data.leads, data.campaignAliases]);
+  }, [data.emailLogs, data.leads, data.campaignAliases, data.campaignTypes]);
 
   // Nombre provisional de una campaña (vacío lo quita). campaign_name no cambia
   const saveCampaignAlias = useCallback(async (name, alias) => {

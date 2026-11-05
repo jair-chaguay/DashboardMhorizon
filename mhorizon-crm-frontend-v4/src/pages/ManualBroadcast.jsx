@@ -1,9 +1,9 @@
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import {
   Send, Users, Paperclip, X, Eye, PencilLine, Trash2, Loader2, Monitor, Smartphone, LayoutTemplate,
-  ChevronDown, BookmarkPlus, CheckCircle2, AlertTriangle, Circle, Clock,
+  ChevronDown, BookmarkPlus, CheckCircle2, AlertTriangle, Circle, Clock, Feather, Newspaper,
 } from 'lucide-react';
 import api from '../api/api';
 import PageHeader from '../components/PageHeader';
@@ -16,6 +16,10 @@ import { parseTags } from '../utils/tags';
 import { confirmAction, promptText } from '../utils/notify';
 import { formatHora } from '../utils/dates';
 import { formatSize } from '../utils/files';
+import EmailDesigner from '../components/EmailDesigner';
+import {
+  renderCorreo, revisarBloques, textoBloques, bloquesValidos, estilosValidos, correoNuevo, sinImagenesIncrustadas,
+} from '../utils/emailBlocks';
 
 // Fuera del componente: si se recrea en cada render, Quill reinicia la barra y pierde el foco
 const modulosQuill = {
@@ -73,13 +77,18 @@ function leerBorrador() {
       cuerpo: typeof data.cuerpo === 'string' ? data.cuerpo : '',
       nombreCampana: typeof data.nombreCampana === 'string' ? data.nombreCampana : '',
       etiquetas: Array.isArray(data.etiquetas) ? data.etiquetas : [],
+      formato: data.formato === 'campana' ? 'campana' : 'personal',
+      bloques: bloquesValidos(data.bloques),
+      estilos: estilosValidos(data.estilos),
+      vistaPrevia: typeof data.vistaPrevia === 'string' ? data.vistaPrevia : '',
     };
   } catch {
     return null;
   }
 }
+// Devuelve false si no se pudo guardar (por ejemplo, imágenes que no caben en el almacenamiento del navegador)
 function guardarBorrador(data) {
-  try { window.localStorage.setItem(BORRADOR_KEY, JSON.stringify(data)); } catch { /* sin almacenamiento */ }
+  try { window.localStorage.setItem(BORRADOR_KEY, JSON.stringify(data)); return true; } catch { return false; }
 }
 function borrarBorrador() {
   try { window.localStorage.removeItem(BORRADOR_KEY); } catch { /* sin almacenamiento */ }
@@ -87,13 +96,13 @@ function borrarBorrador() {
 function leerPlantillas() {
   try {
     const data = JSON.parse(window.localStorage.getItem(PLANTILLAS_KEY) || '[]');
-    return Array.isArray(data) ? data.filter(t => t && typeof t.nombre === 'string' && typeof t.cuerpo === 'string') : [];
+    return Array.isArray(data) ? data.filter(t => t && typeof t.nombre === 'string' && (typeof t.cuerpo === 'string' || Array.isArray(t.bloques))) : [];
   } catch {
     return [];
   }
 }
 function guardarPlantillas(lista) {
-  try { window.localStorage.setItem(PLANTILLAS_KEY, JSON.stringify(lista)); } catch { /* sin almacenamiento */ }
+  try { window.localStorage.setItem(PLANTILLAS_KEY, JSON.stringify(lista)); return true; } catch { return false; }
 }
 
 const Step = ({ n, title, hint, right, children }) => (
@@ -110,6 +119,26 @@ const Step = ({ n, title, hint, right, children }) => (
   </section>
 );
 
+const FORMATOS = [
+  { key: 'personal', icon: Feather, titulo: 'Correo personal', texto: 'Parece escrito a mano: texto simple, ideal para seguimientos y propuestas.' },
+  { key: 'campana', icon: Newspaper, titulo: 'Campaña con diseño', texto: 'Imágenes, botones con enlace y pie de página, como en Mailchimp o Brevo.' },
+];
+
+const Selector = ({ opciones, valor, onChange }) => (
+  <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium">
+    {opciones.map(([key, Icon, label]) => (
+      <button type="button" key={key} onClick={() => onChange(key)} aria-pressed={valor === key}
+        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 cursor-pointer transition-colors ${valor === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+        <Icon size={13} />{label}
+      </button>
+    ))}
+  </div>
+);
+// En campaña no hay plantillas armadas: se parte del pie de página y el contenido lo pone cada quien
+const DISENO_NUEVO = [{ id: 'nuevo', nombre: 'Empezar de cero (solo el pie)', asunto: '', vistaPrevia: '', bloques: correoNuevo }];
+const VISTAS = [['editar', PencilLine, 'Editar'], ['previa', Eye, 'Vista previa']];
+const DISPOSITIVOS = [['escritorio', Monitor, 'Escritorio'], ['movil', Smartphone, 'Móvil']];
+
 const CHECK_STYLE = {
   ok: { icon: CheckCircle2, color: 'text-emerald-500' },
   warn: { icon: AlertTriangle, color: 'text-amber-500' },
@@ -118,12 +147,19 @@ const CHECK_STYLE = {
 
 export default function ManualBroadcast() {
   const [borrador] = useState(leerBorrador);
-  const hayBorrador = !!borrador && (borrador.asunto !== '' || !isEmptyBody(borrador.cuerpo));
+  const hayBorrador = !!borrador && (borrador.asunto !== '' || !isEmptyBody(borrador.cuerpo) || borrador.bloques.length > 0);
 
   const [asunto, setAsunto] = useState(borrador?.asunto ?? '');
   const [cuerpo, setCuerpo] = useState(borrador?.cuerpo ?? '');
   const [nombreCampana, setNombreCampana] = useState(borrador?.nombreCampana ?? '');
   const [selectedTags, setSelectedTags] = useState(borrador?.etiquetas ?? []);
+  // Dos formatos: "personal" (editor de texto, parece escrito a mano) y "campana" (bloques con diseño)
+  const [formato, setFormato] = useState(borrador?.formato ?? 'personal');
+  const [bloques, setBloques] = useState(borrador?.bloques ?? []);
+  const [vistaPrevia, setVistaPrevia] = useState(borrador?.vistaPrevia ?? '');
+  const [estilos, setEstilos] = useState(borrador?.estilos ?? estilosValidos());
+  const [editorAbierto, setEditorAbierto] = useState(false);
+  const [borradorFallo, setBorradorFallo] = useState(false);
   const [archivos, setArchivos] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [message, setMessage] = useState(null);
@@ -141,12 +177,13 @@ export default function ManualBroadcast() {
   useEffect(() => {
     if (primerRender.current) { primerRender.current = false; return; }
     const timer = setTimeout(() => {
-      if (asunto === '' && isEmptyBody(cuerpo)) { borrarBorrador(); setGuardadoA(null); return; }
-      guardarBorrador({ asunto, cuerpo, nombreCampana, etiquetas: selectedTags });
-      setGuardadoA(new Date());
+      if (asunto === '' && isEmptyBody(cuerpo) && bloques.length === 0) { borrarBorrador(); setGuardadoA(null); return; }
+      const ok = guardarBorrador({ asunto, cuerpo, nombreCampana, etiquetas: selectedTags, formato, bloques, vistaPrevia, estilos });
+      setBorradorFallo(!ok);
+      if (ok) setGuardadoA(new Date());
     }, 600);
     return () => clearTimeout(timer);
-  }, [asunto, cuerpo, nombreCampana, selectedTags]);
+  }, [asunto, cuerpo, nombreCampana, selectedTags, formato, bloques, vistaPrevia, estilos]);
 
   // Público: los prospectos activos que tengan al menos una de las etiquetas
   const publico = useMemo(() => leads.filter(l => {
@@ -174,11 +211,15 @@ export default function ManualBroadcast() {
     return pico.aperturas + pico.clics > 0 ? pico.hour : null;
   }, [hourlyActivityData]);
 
-  const cuerpoVacio = isEmptyBody(cuerpo);
-  const textoCuerpo = useMemo(() => htmlToText(cuerpo), [cuerpo]);
-  const snippet = textoCuerpo.replace(/\s+/g, ' ').trim().slice(0, 90);
-  const enlaces = (cuerpo.match(/<a\s[^>]*href=/gi) || []).length;
-  const pesoKb = Math.round(new Blob([cuerpo]).size / 1024);
+  const esCampana = formato === 'campana';
+  // Lo que se envía: el HTML del editor o el correo armado con los bloques
+  const htmlCorreo = useMemo(() => (esCampana ? renderCorreo(bloques, { vistaPrevia, estilos }) : cuerpo), [esCampana, bloques, vistaPrevia, estilos, cuerpo]);
+  const cuerpoVacio = esCampana ? bloques.length === 0 : isEmptyBody(cuerpo);
+  const textoCuerpo = useMemo(() => (esCampana ? textoBloques(bloques) : htmlToText(cuerpo)), [esCampana, bloques, cuerpo]);
+  const snippet = (esCampana && vistaPrevia.trim() ? vistaPrevia : textoCuerpo).replace(/\s+/g, ' ').trim().slice(0, 90);
+  const enlaces = (htmlCorreo.match(/<a\s[^>]*href="(https?:|mailto:|tel:)/gi) || []).length;
+  const pesoKb = Math.round(new Blob([sinImagenesIncrustadas(htmlCorreo)]).size / 1024);
+  const diseno = useMemo(() => revisarBloques(bloques), [bloques]);
   const adjuntosMb = archivos.reduce((acc, a) => acc + a.size, 0) / 1048576;
   const conPendientes = /\[[^\]]{1,60}\]/.test(`${asunto} ${textoCuerpo}`);
 
@@ -193,6 +234,15 @@ export default function ManualBroadcast() {
     { state: conPendientes ? 'warn' : 'ok', text: conPendientes ? 'Quedan textos entre [corchetes] por completar' : 'Sin textos por completar' },
     { state: adjuntosMb <= ADJUNTOS_MAX_MB ? 'ok' : 'warn', text: adjuntosMb <= ADJUNTOS_MAX_MB ? 'Adjuntos livianos' : `Adjuntos de ${adjuntosMb.toFixed(1)} MB: muchos buzones los rechazan` },
   ];
+  if (esCampana) {
+    checks.splice(2, 0,
+      ...(diseno.sinImagen > 0 ? [{ state: 'pending', text: `${diseno.sinImagen} ${diseno.sinImagen === 1 ? 'bloque de imagen vacío' : 'bloques de imagen vacíos'}` }] : []),
+      ...(diseno.subidas > 0 ? [{ state: 'ok', text: `${diseno.subidas} ${diseno.subidas === 1 ? 'imagen subida' : 'imágenes subidas'} desde tu equipo` }] : []),
+      ...(diseno.locales > 0 ? [{ state: 'warn', text: `${diseno.locales} ${diseno.locales === 1 ? 'imagen apunta' : 'imágenes apuntan'} a este equipo: nadie más la verá` }] : []),
+      { state: diseno.botonesSinEnlace > 0 ? 'warn' : 'ok', text: diseno.botonesSinEnlace > 0 ? `${diseno.botonesSinEnlace} ${diseno.botonesSinEnlace === 1 ? 'botón' : 'botones'} sin enlace` : 'Botones con enlace' },
+      { state: diseno.tienePie ? 'ok' : 'warn', text: diseno.tienePie ? 'Pie de página con los datos de la empresa' : 'Falta el pie de página' },
+    );
+  }
   if (deliverability.hasDeliveryData) {
     checks.splice(3, 0, { state: noEnviables > 0 ? 'warn' : 'ok', text: noEnviables > 0 ? `${noEnviables} del público rebotaron o se dieron de baja` : 'Nadie del público rebotó ni se dio de baja' });
   }
@@ -217,10 +267,14 @@ export default function ManualBroadcast() {
     setCuerpo('');
     setNombreCampana('');
     setSelectedTags([]);
+    setBloques([]);
+    setVistaPrevia('');
+    setEstilos(estilosValidos());
     setRestaurado(false);
     setGuardadoA(null);
   };
 
+  // Una plantilla de campaña trae bloques (los diseños base los crean con ids nuevos); la personal, el HTML del editor
   const aplicarPlantilla = async (plantilla) => {
     setPlantillasOpen(false);
     if (asunto.trim() || !cuerpoVacio) {
@@ -228,7 +282,16 @@ export default function ManualBroadcast() {
       if (!confirmed) return;
     }
     setAsunto(plantilla.asunto || '');
-    setCuerpo(plantilla.cuerpo);
+    if (plantilla.bloques) {
+      const lista = typeof plantilla.bloques === 'function' ? plantilla.bloques() : bloquesValidos(plantilla.bloques).map(b => ({ ...b, id: `${b.id}-${new Date().getTime()}` }));
+      setFormato('campana');
+      setBloques(lista);
+      setEstilos(estilosValidos(plantilla.estilos));
+      setVistaPrevia(plantilla.vistaPrevia || '');
+    } else {
+      setFormato('personal');
+      setCuerpo(plantilla.cuerpo);
+    }
     setRestaurado(false);
     setVista('editar');
   };
@@ -241,10 +304,14 @@ export default function ManualBroadcast() {
     }
     const nombre = await promptText({ title: 'Guardar como plantilla', placeholder: 'Nombre de la plantilla' });
     if (!nombre) return;
-    const lista = [...plantillas, { id: `usuario-${new Date().getTime()}`, nombre, asunto, cuerpo }];
+    const datos = esCampana ? { formato, bloques, vistaPrevia, estilos } : { cuerpo };
+    const lista = [...plantillas, { id: `usuario-${new Date().getTime()}`, nombre, asunto, ...datos }];
+    if (!guardarPlantillas(lista)) {
+      setMessage({ type: 'error', text: 'No se pudo guardar: las imágenes del diseño no caben en el almacenamiento de este navegador.' });
+      return;
+    }
     setPlantillas(lista);
-    guardarPlantillas(lista);
-    setMessage({ type: 'success', text: `Plantilla "${nombre}" guardada en este navegador.` });
+    setMessage({ type: 'success', text: esCampana ? `Diseño "${nombre}" guardado en este navegador.` : `Plantilla "${nombre}" guardada en este navegador.` });
   };
 
   const eliminarPlantilla = async (plantilla) => {
@@ -280,7 +347,8 @@ export default function ManualBroadcast() {
 
     const formData = new FormData();
     formData.append('asunto', asunto);
-    formData.append('cuerpo', cuerpo);
+    formData.append('cuerpo', htmlCorreo);
+    formData.append('formato', formato);
     formData.append('etiqueta', selectedTags.join(','));
     // Si queda vacío, el servidor arma "Campaña Etiquetas ... Fase ..."
     if (nombreCampana.trim()) formData.append('nombre_provisional', nombreCampana.trim());
@@ -297,6 +365,8 @@ export default function ManualBroadcast() {
       setCuerpo('');
       setNombreCampana('');
       setSelectedTags([]);
+      setBloques([]);
+      setVistaPrevia('');
       setArchivos([]);
       setRestaurado(false);
       setVista('editar');
@@ -311,7 +381,18 @@ export default function ManualBroadcast() {
     }
   };
 
-  const previewDoc = `<!doctype html><meta charset="utf-8"><style>body{margin:0;padding:20px;font:14px/1.6 Arial,Helvetica,sans-serif;color:#1e293b}img{max-width:100%;height:auto}a{color:#0a2c5e}h1,h2,h3{margin:0 0 .5em}p{margin:0 0 1em}</style>${cuerpo}`;
+  const previewDoc = esCampana
+    ? `<!doctype html><meta charset="utf-8"><style>body{margin:0}</style>${htmlCorreo}`
+    : `<!doctype html><meta charset="utf-8"><style>body{margin:0;padding:20px;font:14px/1.6 Arial,Helvetica,sans-serif;color:#1e293b}img{max-width:100%;height:auto}a{color:#0a2c5e}h1,h2,h3{margin:0 0 .5em}p{margin:0 0 1em}</style>${cuerpo}`;
+  const plantillasDelFormato = plantillas.filter(t => (esCampana ? Array.isArray(t.bloques) : !Array.isArray(t.bloques)));
+  const plantillasBase = esCampana ? DISENO_NUEVO : PLANTILLAS_BASE;
+  const elegirFormato = (key) => {
+    setFormato(key);
+    setVista('editar');
+    if (key === 'campana' && bloques.length === 0) { setBloques(correoNuevo()); setEditorAbierto(true); }
+  };
+  const guardarDiseno = useCallback((nuevosBloques, nuevosEstilos) => { setBloques(nuevosBloques); setEstilos(nuevosEstilos); }, []);
+  const cerrarEditor = useCallback(() => setEditorAbierto(false), []);
   const asuntoLargo = asunto.length > ASUNTO_IDEAL;
 
   return (
@@ -350,25 +431,25 @@ export default function ManualBroadcast() {
             ) : <p className="text-[13px] text-slate-500">Aún no hay etiquetas. Agrégalas a tus prospectos para poder enviar.</p>}
           </Step>
 
-          <Step n="2" title="Mensaje" hint="Puedes pegar imágenes directamente en el editor."
+          <Step n="2" title="Mensaje" hint={esCampana ? 'Arma el correo con imágenes, textos y botones. El pie de página ya viene listo.' : 'Puedes pegar imágenes directamente en el editor.'}
             right={(
               <div className="relative">
                 <button type="button" onClick={() => setPlantillasOpen(o => !o)} aria-expanded={plantillasOpen}
                   className="h-8 px-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 text-[13px] font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
-                  <LayoutTemplate size={14} /> Plantillas <ChevronDown size={13} className={`transition-transform ${plantillasOpen ? 'rotate-180' : ''}`} />
+                  <LayoutTemplate size={14} /> {esCampana ? 'Diseños' : 'Plantillas'} <ChevronDown size={13} className={`transition-transform ${plantillasOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {plantillasOpen && (
                   <>
                     <button type="button" aria-label="Cerrar plantillas" tabIndex={-1} onClick={() => setPlantillasOpen(false)} className="fixed inset-0 z-10 cursor-default" />
                     <div className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl animate-pop">
-                      <p className="px-2.5 pt-1.5 pb-1 text-xs font-medium text-slate-500">Plantillas base</p>
-                      {PLANTILLAS_BASE.map(t => (
+                      <p className="px-2.5 pt-1.5 pb-1 text-xs font-medium text-slate-500">{esCampana ? 'Diseños base' : 'Plantillas base'}</p>
+                      {plantillasBase.map(t => (
                         <button type="button" key={t.id} onClick={() => aplicarPlantilla(t)} className="w-full rounded-lg px-2.5 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">{t.nombre}</button>
                       ))}
-                      {plantillas.length > 0 && (
+                      {plantillasDelFormato.length > 0 && (
                         <>
-                          <p className="px-2.5 pt-2 pb-1 text-xs font-medium text-slate-500">Tus plantillas</p>
-                          {plantillas.map(t => (
+                          <p className="px-2.5 pt-2 pb-1 text-xs font-medium text-slate-500">{esCampana ? 'Tus diseños' : 'Tus plantillas'}</p>
+                          {plantillasDelFormato.map(t => (
                             <div key={t.id} className="flex items-center rounded-lg hover:bg-slate-50">
                               <button type="button" onClick={() => aplicarPlantilla(t)} className="min-w-0 flex-1 truncate px-2.5 py-2 text-left text-sm text-slate-700 cursor-pointer">{t.nombre}</button>
                               <button type="button" onClick={() => eliminarPlantilla(t)} aria-label={`Eliminar ${t.nombre}`} className="mr-1 h-7 w-7 grid place-items-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"><Trash2 size={14} /></button>
@@ -379,13 +460,32 @@ export default function ManualBroadcast() {
                       <div className="my-1 border-t border-slate-100" />
                       <button type="button" onClick={guardarComoPlantilla} disabled={asunto.trim() === '' && cuerpoVacio}
                         className="w-full inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
-                        <BookmarkPlus size={15} /> Guardar el correo actual como plantilla
+                        <BookmarkPlus size={15} /> {esCampana ? 'Guardar el diseño actual' : 'Guardar el correo actual como plantilla'}
                       </button>
                     </div>
                   </>
                 )}
               </div>
             )}>
+            <div className="mb-5">
+              <span className={`${ui.label} block mb-2`}>Formato</span>
+              <div className="grid sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Formato del correo">
+                {FORMATOS.map(({ key, icon: Icon, titulo, texto }) => {
+                  const activo = formato === key;
+                  return (
+                    <button type="button" key={key} role="radio" aria-checked={activo} onClick={() => elegirFormato(key)}
+                      className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors cursor-pointer ${activo ? 'border-brand-600 bg-brand-50/60 ring-1 ring-brand-600' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                      <span className={`mt-0.5 h-8 w-8 shrink-0 grid place-items-center rounded-md ${activo ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-500'}`}><Icon size={16} /></span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-slate-900">{titulo}</span>
+                        <span className="block text-xs leading-snug text-slate-500 mt-0.5">{texto}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="mb-5">
               <label htmlFor="nombre-campana" className={`${ui.label} block mb-2`}>Nombre de la campaña <span className="font-normal text-slate-500">(opcional)</span></label>
               <input
@@ -415,34 +515,42 @@ export default function ManualBroadcast() {
             />
             {asuntoLargo && <p className="text-xs text-amber-600 mt-1.5">Los asuntos de más de {ASUNTO_IDEAL} caracteres se cortan en muchos celulares.</p>}
 
-            <div className="flex items-center justify-between mt-5 mb-2">
-              <span className={ui.label}>Cuerpo del correo</span>
-              <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium">
-                {[['editar', PencilLine, 'Editar'], ['previa', Eye, 'Vista previa']].map(([key, Icon, label]) => (
-                  <button type="button" key={key} onClick={() => setVista(key)} aria-pressed={vista === key}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 cursor-pointer transition-colors ${vista === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                    <Icon size={13} />{label}
-                  </button>
-                ))}
+            {esCampana && (
+              <div className="mt-5">
+                <label htmlFor="vista-previa" className={`${ui.label} block mb-2`}>Texto de vista previa <span className="font-normal text-slate-500">(opcional)</span></label>
+                <input id="vista-previa" type="text" maxLength={150} value={vistaPrevia} onChange={(e) => setVistaPrevia(e.target.value)}
+                  className={`${ui.input} w-full`} placeholder="Ej. Fechas máximas de declaraciones y anexos del mes" />
+                <p className="text-xs text-slate-500 mt-1.5">La línea gris que se ve junto al asunto en la bandeja de entrada.</p>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-5 mb-2">
+              <span className={ui.label}>{esCampana ? 'Diseño del correo' : 'Cuerpo del correo'}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {vista === 'previa' && <Selector opciones={DISPOSITIVOS} valor={dispositivo} onChange={setDispositivo} />}
+                <Selector opciones={VISTAS} valor={vista} onChange={setVista} />
               </div>
             </div>
 
-            <div className={vista === 'editar' ? 'editor-body' : 'hidden'}>
-              <ReactQuill theme="snow" value={cuerpo} onChange={setCuerpo} modules={modulosQuill} />
-            </div>
+            {!esCampana && (
+              <div className={vista === 'editar' ? 'editor-body' : 'hidden'}>
+                <ReactQuill theme="snow" value={cuerpo} onChange={setCuerpo} modules={modulosQuill} />
+              </div>
+            )}
+            {esCampana && vista === 'editar' && (
+              <div className="rounded-lg border border-slate-200 animate-fade-in">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+                  <p className="text-[13px] text-slate-500">{bloques.length} {bloques.length === 1 ? 'bloque' : 'bloques'}. Ábrelo para agregar imágenes, textos y botones.</p>
+                  <button type="button" onClick={() => setEditorAbierto(true)} className={`${ui.btnPrimary} h-9`}><PencilLine size={15} /> Abrir editor</button>
+                </div>
+                <button type="button" onClick={() => setEditorAbierto(true)} aria-label="Abrir editor" className="block w-full cursor-pointer">
+                  <iframe title="Miniatura del correo" sandbox="" srcDoc={previewDoc} tabIndex={-1} className="pointer-events-none block h-[26rem] w-full rounded-b-lg bg-white" />
+                </button>
+              </div>
+            )}
             {vista === 'previa' && (
               <div className="space-y-3 animate-fade-in">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs text-slate-500">Así se vería en la bandeja de entrada y al abrirlo.</p>
-                  <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium">
-                    {[['escritorio', Monitor, 'Escritorio'], ['movil', Smartphone, 'Móvil']].map(([key, Icon, label]) => (
-                      <button type="button" key={key} onClick={() => setDispositivo(key)} aria-pressed={dispositivo === key}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 cursor-pointer transition-colors ${dispositivo === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                        <Icon size={13} />{label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <p className="text-xs text-slate-500">Así se vería en la bandeja de entrada y al abrirlo.</p>
 
                 <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
                   <span className="h-9 w-9 shrink-0 rounded-full bg-navy-900 text-white grid place-items-center text-xs font-bold">M</span>
@@ -457,7 +565,7 @@ export default function ManualBroadcast() {
                   : (
                     <div className="flex justify-center rounded-lg bg-slate-100 p-3 sm:p-5">
                       <iframe title="Vista previa del correo" sandbox="" srcDoc={previewDoc}
-                        className={`h-80 max-w-full rounded-lg border border-slate-200 bg-white transition-[width] duration-300 ${dispositivo === 'movil' ? 'w-[375px]' : 'w-[640px]'}`} />
+                        className={`${esCampana ? 'h-[36rem]' : 'h-80'} max-w-full rounded-lg border border-slate-200 bg-white transition-[width] duration-300 ${dispositivo === 'movil' ? 'w-[375px]' : (esCampana ? 'w-[648px]' : 'w-[640px]')}`} />
                     </div>
                   )}
               </div>
@@ -549,12 +657,16 @@ export default function ManualBroadcast() {
                 {isSending ? <><Loader2 size={17} className="animate-spin" /> Encolando...</> : <><Send size={17} /> Enviar campaña</>}
               </button>
               <p className="text-center text-xs text-slate-500 min-h-4">
-                {guardadoA ? `Borrador guardado a las ${formatHora(guardadoA)}` : 'El borrador se guarda solo en este navegador'}
+                {borradorFallo ? 'No se pudo guardar el borrador: las imágenes no caben en este navegador' : guardadoA ? `Borrador guardado a las ${formatHora(guardadoA)}` : 'El borrador se guarda solo en este navegador'}
               </p>
             </div>
           </Panel>
         </aside>
       </form>
+
+      {editorAbierto && esCampana && (
+        <EmailDesigner bloques={bloques} estilos={estilos} onChange={guardarDiseno} onClose={cerrarEditor} />
+      )}
     </div>
   );
 }
