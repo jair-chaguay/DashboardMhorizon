@@ -3,6 +3,7 @@ import { X, Send, MailOpen, MousePointerClick, Tag, Trash2, Copy, Check, Ban, Us
 import Skeleton from './Skeleton';
 import { parseTags } from '../utils/tags';
 import { ui } from '../utils/theme';
+import { estadoLabel, faseLabel } from '../utils/status';
 import { parseDate, formatFechaHora, timeAgo } from '../utils/dates';
 
 const MAX_EVENTS = 30;
@@ -114,8 +115,8 @@ export default function ContactDrawer({ lead, logs, loadingLogs, busy, flag, onC
               </button>
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <span className="bg-slate-100 text-slate-700 font-medium px-2 py-0.5 rounded-md text-xs">Fase {Math.min(lead.fase || 1, 5)}</span>
-              <span className="text-[13px] text-slate-500">{lead.status || 'Pendiente'}</span>
+              <span className="bg-slate-100 text-slate-700 font-medium px-2 py-0.5 rounded-md text-xs">{faseLabel(Math.min(lead.fase ?? 1, 5))}</span>
+              <span className="text-[13px] text-slate-500">{estadoLabel(lead.status)}</span>
             </div>
           </div>
           <button type="button" onClick={close} aria-label="Cerrar" className="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"><X size={18} /></button>

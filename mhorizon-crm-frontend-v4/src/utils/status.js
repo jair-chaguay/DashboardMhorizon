@@ -6,6 +6,10 @@ const REPLIED = /^(respondi[oó]|conversando con ia|derivado a equipo)/i;
 const CONTACTED = /^(contactado|avanz[oó] a fase|enviado)/i;
 const STOPPED = /^(no contactar|retirado|terminado)/i;
 
+// Fase 0: prospecto que no entra al flujo de fases, solo recibe envíos manuales
+export const faseLabel = (fase) => (Number(fase) === 0 ? 'Sin fases' : `Fase ${fase}`);
+export const estadoLabel = (status) => String(status || 'Pendiente').replace('(Fase 0)', '(Sin fases)');
+
 export const isReplied = (status) => REPLIED.test(String(status || ''));
 
 // Color del punto que acompaña al estado en las tablas

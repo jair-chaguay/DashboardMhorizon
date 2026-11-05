@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UploadCloud, Search, Tag, X, Trash2, ArrowUpDown, Download } from 'lucide-react';
+import { UploadCloud, Search, Tag, X, Trash2, ArrowUpDown, Download, LogIn, LogOut } from 'lucide-react';
 import api from '../api/api';
 import Modal from '../components/Modal';
 import ContactDrawer from '../components/ContactDrawer';
@@ -15,15 +15,20 @@ import { downloadCsv } from '../utils/csv';
 import { toDayKey } from '../utils/dates';
 import { formatSize } from '../utils/files';
 import { parseTags } from '../utils/tags';
-import { isReplied, statusDot } from '../utils/status';
+import { estadoLabel, faseLabel, isReplied, statusDot } from '../utils/status';
 import { confirmAction, notifyError, notifySuccess } from '../utils/notify';
 import { DELIVERED_FLAG, deliveryFlag, summarizeDeliverability } from '../utils/deliverability';
 
 const PAGE_SIZE = 25;
 const FASES = [1, 2, 3, 4, 5];
 const EMPTY_TAG_MODAL = { isOpen: false, emails: [] };
-const faseOf = (lead) => lead.fase || 1;
-const estadoOf = (lead) => lead.status || 'Pendiente';
+const faseOf = (lead) => lead.fase ?? 1;
+const estadoOf = (lead) => estadoLabel(lead.status);
+const SIN_FASES = 0;
+const OPCIONES_CARGA = [
+  [true, 'Pasar a fases', 'Entran en la Fase 1 y reciben los correos automáticos de la IA.'],
+  [false, 'No pasar a fases', 'Solo reciben los correos que envíes por difusión manual.'],
+];
 // Para seguimiento: hizo clic en algún correo y todavía no ha respondido
 const SEGUIMIENTO = '__seguimiento';
 const needsFollowUp = (lead) => (lead.clicks || 0) > 0 && !isReplied(estadoOf(lead));
@@ -38,6 +43,7 @@ export default function Audience() {
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [etiquetasUpload, setEtiquetasUpload] = useState('');
+  const [pasarAFases, setPasarAFases] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -177,6 +183,30 @@ export default function Audience() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleCambiarFlujo = async (emails, enFases) => {
+    const confirmed = await confirmAction({
+      title: enFases ? `¿Pasar ${emails.length} a fases?` : `¿Sacar ${emails.length} de las fases?`,
+      text: enFases
+        ? 'Los que no están en el flujo entrarán en la Fase 1 y recibirán los correos automáticos de la IA.'
+        : 'Dejarán de recibir correos automáticos y perderán su avance: si vuelven, empiezan en la Fase 1. Seguirán recibiendo difusiones manuales.',
+      confirmText: enFases ? 'Sí, pasar a fases' : 'Sí, sacar de fases',
+    });
+    if (!confirmed) return;
+
+    setWorking(true);
+    try {
+      const { data } = await api.post('/leads/fases', { emails, en_fases: enFases });
+      setSelected([]);
+      await fetchLeads();
+      notifySuccess(`Se actualizaron ${data?.actualizados ?? 0} de ${emails.length} prospectos. Los que ya estaban así o fueron retirados no cambian.`);
+    } catch (error) {
+      console.error('Error al cambiar el flujo de fases', error);
+      notifyError('No se pudieron actualizar los prospectos.');
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!file) return;
@@ -186,10 +216,12 @@ export default function Audience() {
     const formData = new FormData();
     formData.append('csv_file', file);
     if (etiquetasUpload.trim() !== '') formData.append('etiquetas', etiquetasUpload);
+    formData.append('pasar_a_fases', pasarAFases ? '1' : '0');
 
     try {
-      await api.post('/leads/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setMessage({ type: 'success', text: 'Base de datos cargada y etiquetas asignadas correctamente.' });
+      const { data } = await api.post('/leads/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const yaEnFases = data?.ya_en_fases || 0;
+      setMessage({ type: 'success', text: `Base de datos cargada y etiquetas asignadas correctamente.${yaEnFases > 0 ? ` ${yaEnFases} ya estaban en fases y siguen ahí; puedes sacarlos marcándolos en la tabla.` : ''}` });
       setFile(null);
       setEtiquetasUpload('');
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -235,7 +267,7 @@ export default function Audience() {
 
   const exportCsv = () => downloadCsv(`prospectos-${toDayKey(new Date())}.csv`, [
     ['Correo', 'Nombre', 'Empresa', 'Teléfono', 'Responsable', 'Fase', 'Estado', 'Entrega', 'Etiquetas', 'Enviados', 'Aperturas', 'Clics', 'Próxima acción', 'Fecha', 'Notas'],
-    ...leadsFiltrados.map(l => [l.email, l.nombre, l.empresa, l.telefono, l.responsable, Math.min(faseOf(l), 5), estadoOf(l), deliveryFlag(l.email, delivery)?.label || '',
+    ...leadsFiltrados.map(l => [l.email, l.nombre, l.empresa, l.telefono, l.responsable, faseLabel(Math.min(faseOf(l), 5)), estadoOf(l), deliveryFlag(l.email, delivery)?.label || '',
       parseTags(l.etiquetas).join(' | '), l.sent || 0, l.opens || 0, l.clicks || 0, l.proxima_accion, l.proxima_fecha, l.notas]),
   ]);
 
@@ -271,7 +303,7 @@ export default function Audience() {
           </div>
           {leads.length > 0 && <button type="button" onClick={() => setShowUpload(false)} aria-label="Cerrar carga de CSV" className="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"><X size={16} /></button>}
         </div>
-        <form onSubmit={handleUpload} className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+        <form onSubmit={handleUpload} className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center gap-3">
           <div onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop}
             className={`relative w-full md:flex-1 min-w-0 h-10 shrink-0 flex items-center gap-3 px-3 rounded-lg border border-dashed transition-colors ${dragging ? 'border-brand-600 bg-brand-50' : file ? 'border-slate-300 bg-slate-50' : 'border-slate-300 hover:border-slate-400'}`}>
             <input ref={fileInputRef} id="csv-file" type="file" accept=".csv,text/csv" onChange={(e) => pickFile(e.target.files[0])} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="Elegir archivo CSV" />
@@ -290,6 +322,18 @@ export default function Audience() {
           <button type="submit" disabled={!file || uploading} className={`${ui.btnPrimary} px-5 whitespace-nowrap`}>
             {uploading ? 'Subiendo...' : 'Subir archivo'}
           </button>
+          <fieldset className="md:basis-full">
+            <legend className={`${ui.label} mb-2`}>¿Pasan al flujo de fases?</legend>
+            <div className="grid sm:grid-cols-2 gap-2.5">
+              {OPCIONES_CARGA.map(([value, label, hint]) => (
+                <label key={label} className={`cursor-pointer rounded-lg border px-3 py-2.5 transition-colors ${pasarAFases === value ? 'bg-brand-50/60 border-brand-600 ring-1 ring-brand-600' : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                  <input type="radio" name="pasar-a-fases" checked={pasarAFases === value} onChange={() => setPasarAFases(value)} className="sr-only" />
+                  <span className="block text-sm font-semibold text-slate-900">{label}</span>
+                  <span className="block mt-0.5 text-xs text-slate-500">{hint}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </form>
         <StatusMessage message={message} className="mt-4 p-3 rounded-lg" />
       </section>
@@ -315,7 +359,7 @@ export default function Audience() {
 
         {/* Fases como pestañas: al pulsar una se filtra la tabla */}
         <div className="flex gap-1 overflow-x-auto px-3 pt-3 border-b border-slate-100" role="tablist" aria-label="Filtrar por fase">
-          {[['Todas', 'Todos', leads.length], ...FASES.map(f => [f, `Fase ${f}`, faseCounts[f]])].map(([value, label, count]) => {
+          {[['Todas', 'Todos', leads.length], ...FASES.map(f => [f, `Fase ${f}`, faseCounts[f]]), [SIN_FASES, faseLabel(SIN_FASES), faseCounts[SIN_FASES] || 0]].map(([value, label, count]) => {
             const active = filtroFase === value;
             return (
               <button key={value} role="tab" aria-selected={active} onClick={() => resetView(setFiltroFase)(value)}
@@ -358,6 +402,8 @@ export default function Audience() {
           <div className="px-4 py-2.5 bg-navy-900 text-white flex flex-wrap items-center gap-3 text-sm animate-slide-down">
             <span className="font-bold">{selected.length} seleccionado{selected.length > 1 ? 's' : ''}</span>
             <button disabled={working} onClick={() => setModalTag({ isOpen: true, emails: selected })} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/10 hover:bg-white/20 font-semibold cursor-pointer disabled:opacity-50"><Tag size={14} /> Etiquetar</button>
+            <button disabled={working} onClick={() => handleCambiarFlujo(selected, true)} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/10 hover:bg-white/20 font-semibold cursor-pointer disabled:opacity-50"><LogIn size={14} /> Pasar a fases</button>
+            <button disabled={working} onClick={() => handleCambiarFlujo(selected, false)} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/10 hover:bg-white/20 font-semibold cursor-pointer disabled:opacity-50"><LogOut size={14} /> Sacar de fases</button>
             <button disabled={working} onClick={() => handleEliminar(selected)} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-rose-500/20 text-rose-200 hover:bg-rose-500/30 font-semibold cursor-pointer disabled:opacity-50"><Trash2 size={14} /> Eliminar</button>
             <button onClick={() => setSelected([])} className="ml-auto text-slate-300 hover:text-white font-semibold cursor-pointer">Quitar selección</button>
           </div>
@@ -400,7 +446,7 @@ export default function Audience() {
                         <button onClick={() => setOpenEmail(lead.email)} title="Ver ficha del prospecto" className="block font-medium text-slate-900 hover:text-brand-700 text-left cursor-pointer">{lead.email}</button>
                         {(lead.nombre || lead.empresa) && <span className="md:hidden block text-xs text-slate-500">{[lead.nombre, lead.empresa].filter(Boolean).join(' · ')}</span>}
                         <span className="md:hidden mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-                          Fase {faseOf(lead)} · {estadoOf(lead)} · {lead.opens || 0} aperturas · {lead.clicks || 0} clics
+                          {faseLabel(faseOf(lead))} · {estadoOf(lead)} · {lead.opens || 0} aperturas · {lead.clicks || 0} clics
                           {flag && <span className={`rounded-md px-1.5 py-0.5 font-medium ${flag.tone}`}>{flag.label}</span>}
                         </span>
                       </td>
@@ -408,7 +454,7 @@ export default function Audience() {
                         {lead.nombre ? <span className="block truncate font-medium text-slate-800" title={lead.nombre}>{lead.nombre}</span> : <span className="text-slate-300">—</span>}
                         {lead.empresa && <span className="block truncate text-xs text-slate-500" title={lead.empresa}>{lead.empresa}</span>}
                       </td>
-                      <td className="py-2.5 px-5 text-slate-600 whitespace-nowrap hidden md:table-cell">Fase {faseOf(lead)}</td>
+                      <td className="py-2.5 px-5 text-slate-600 whitespace-nowrap hidden md:table-cell">{faseLabel(faseOf(lead))}</td>
                       <td className="py-2.5 px-5 whitespace-nowrap hidden md:table-cell">
                         <span className="inline-flex items-center gap-2 text-slate-600"><span className={`h-1.5 w-1.5 rounded-full ${statusDot(estadoOf(lead))}`} />{estadoOf(lead)}</span>
                       </td>

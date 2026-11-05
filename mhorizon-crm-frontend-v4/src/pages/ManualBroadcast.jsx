@@ -28,8 +28,9 @@ const modulosQuill = {
   ],
 };
 
-// El envío llega a los prospectos activos: los de fase 99 ya terminaron su secuencia
-const FASES = [1, 2, 3, 4, 5];
+// El envío llega a los prospectos activos, también a los que no están en el flujo (fase 0).
+// Los de fase 99 ya terminaron su secuencia
+const FASES = [0, 1, 2, 3, 4, 5];
 const BORRADOR_KEY = 'mhorizon:borrador-difusion';
 const PLANTILLAS_KEY = 'mhorizon:plantillas';
 const MAX_PLANTILLAS = 10;
@@ -158,7 +159,11 @@ export default function ManualBroadcast() {
   const nombreAutomatico = useMemo(() => {
     const fases = [...new Set(publico.map(l => Number(l.fase)))].sort((a, b) => a - b);
     if (fases.length === 0) return '';
-    return `Campaña Etiquetas ${selectedTags.join(', ')} ${fases.length === 1 ? 'Fase' : 'Fases'} ${fases.join(', ')}`;
+    const conFase = fases.filter(Boolean);
+    const partes = [];
+    if (conFase.length > 0) partes.push(`${conFase.length === 1 ? 'Fase' : 'Fases'} ${conFase.join(', ')}`);
+    if (fases.includes(0)) partes.push(conFase.length > 0 ? 'sin fases' : 'Sin fases');
+    return `Campaña Etiquetas ${selectedTags.join(', ')} ${partes.join(' y ')}`;
   }, [publico, selectedTags]);
   // Del público, cuántos rebotaron (duro) o se dieron de baja: el servidor debería dejarlos fuera
   const noEnviables = useMemo(() => publico.filter(l => deliverability.hard.has(l.email) || deliverability.unknown.has(l.email) || deliverability.unsub.has(l.email) || deliverability.spam.has(l.email)).length, [publico, deliverability]);

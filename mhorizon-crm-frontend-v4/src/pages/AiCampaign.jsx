@@ -37,9 +37,11 @@ export default function AiCampaign() {
 
   const porFase = useMemo(() => {
     const counts = Object.fromEntries(FASES.map(f => [f, 0]));
-    leads.forEach(l => { counts[Math.min(l.fase || 1, 5)] += 1; });
+    leads.forEach(l => { if ((l.fase ?? 1) !== 0) counts[Math.min(l.fase ?? 1, 5)] += 1; });
     return counts;
   }, [leads]);
+  // Los que no están en el flujo de fases solo reciben envíos manuales
+  const enFases = Object.values(porFase).reduce((acc, n) => acc + n, 0);
   const maxFase = Math.max(...Object.values(porFase), 0);
 
   const handleLaunch = async () => {
@@ -116,7 +118,7 @@ export default function AiCampaign() {
           )}
         </div>
 
-        <Panel title="Prospectos a evaluar" subtitle={loading ? 'Cargando...' : `${leads.length} en tu base, por fase`}>
+        <Panel title="Prospectos a evaluar" subtitle={loading ? 'Cargando...' : `${enFases} en el flujo, por fase`}>
           {loading ? (
             <p className="text-sm text-slate-500 py-6 text-center">Cargando prospectos...</p>
           ) : leads.length === 0 ? (

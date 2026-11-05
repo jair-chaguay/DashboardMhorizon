@@ -2,6 +2,7 @@ import { Download } from 'lucide-react';
 import Modal from './Modal';
 import { downloadCsv } from '../utils/csv';
 import { toDayKey } from '../utils/dates';
+import { faseLabel } from '../utils/status';
 
 function ctorBadge(opens, clicks) {
   const porcentaje = opens > 0 ? Math.min(Math.round((clicks / opens) * 100), 100) : 0;
@@ -14,7 +15,7 @@ function ctorBadge(opens, clicks) {
 const exportLeads = (modalDetails) => downloadCsv(
   `contactos-${toDayKey(new Date())}.csv`,
   [['Correo', 'Nombre', 'Empresa', 'Aperturas', 'Clics', 'CTOR (%)', 'Fase'],
-    ...modalDetails.leads.map(l => [l.email, l.nombre || '', l.empresa || '', l.displayOpens, l.displayClicks, ctorBadge(l.displayOpens, l.displayClicks).porcentaje, l.fase || 1])]
+    ...modalDetails.leads.map(l => [l.email, l.nombre || '', l.empresa || '', l.displayOpens, l.displayClicks, ctorBadge(l.displayOpens, l.displayClicks).porcentaje, faseLabel(l.fase ?? 1)])]
 );
 
 export default function DetailsModal({ modalDetails, onClose }) {
@@ -58,7 +59,7 @@ export default function DetailsModal({ modalDetails, onClose }) {
                   <td className="py-2.5 px-2 text-center tabular-nums text-slate-700">{lead.displayOpens}</td>
                   <td className="py-2.5 px-2 text-center tabular-nums text-slate-700">{lead.displayClicks}</td>
                   <td className="py-3 px-2 text-center"><span className={`px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ${colorClass}`}>{porcentaje}%</span></td>
-                  <td className="py-3 pl-2 text-slate-600 hidden sm:table-cell">Fase {lead.fase || 1}</td>
+                  <td className="py-3 pl-2 text-slate-600 hidden sm:table-cell">{faseLabel(lead.fase ?? 1)}</td>
                 </tr>
               );
             })}

@@ -11,6 +11,7 @@ import DeviceHourCharts from '../components/Charts';
 import { BarRow, LegendDot, Panel, Stat, StatGrid } from '../components/analytics';
 import { COLORS, tooltipStyle, axisTick, selectClass, ui } from '../utils/theme';
 import { useDashboardMetrics } from '../hooks/useDashboardMetrics';
+import { estadoLabel, faseLabel } from '../utils/status';
 import { formatHora, timeAgo, toDayKey } from '../utils/dates';
 
 const PERIODS = [['Todos', 'Todo el tiempo'], ['7dias', 'Últimos 7 días'], ['30dias', 'Últimos 30 días'], ['esteMes', 'Este mes']];
@@ -187,9 +188,9 @@ export default function Dashboard() {
                         className="border-b border-slate-100 last:border-0 cursor-pointer transition-colors hover:bg-slate-50">
                         <td className="py-2.5 px-5 max-w-0 w-full">
                           <button type="button" className="block w-full truncate text-left font-medium text-slate-900 hover:text-brand-700 cursor-pointer">{lead.email}</button>
-                          <span className="block text-xs text-slate-500">{lead.status || 'Pendiente'}</span>
+                          <span className="block text-xs text-slate-500">{estadoLabel(lead.status)}</span>
                         </td>
-                        <td className="py-2.5 px-5 text-slate-600 whitespace-nowrap hidden sm:table-cell">Fase {Math.min(lead.fase || 1, 5)}</td>
+                        <td className="py-2.5 px-5 text-slate-600 whitespace-nowrap hidden sm:table-cell">{faseLabel(Math.min(lead.fase ?? 1, 5))}</td>
                         <td className="py-2.5 px-5 text-right tabular-nums text-slate-700">{lead.displayOpens}</td>
                         <td className="py-2.5 px-5 text-right tabular-nums font-semibold text-slate-900">{lead.displayClicks}</td>
                       </tr>

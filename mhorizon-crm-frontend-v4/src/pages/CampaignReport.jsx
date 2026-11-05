@@ -13,12 +13,12 @@ import { COLORS, ui } from '../utils/theme';
 import { useDashboardMetrics } from '../hooks/useDashboardMetrics';
 import { downloadCsv } from '../utils/csv';
 import { formatFechaHora, parseDate, toDayKey } from '../utils/dates';
-import { isReplied } from '../utils/status';
+import { estadoLabel, faseLabel, isReplied } from '../utils/status';
 
-const FASES = [1, 2, 3, 4, 5];
+const FASES = [0, 1, 2, 3, 4, 5];
 const PAGE_SIZE = 25;
 const percent = (part, total) => (total > 0 ? Math.round((part / total) * 100) : 0);
-const faseOf = (lead) => Math.min(lead?.fase || 1, 5);
+const faseOf = (lead) => Math.min(lead?.fase ?? 1, 5);
 
 // Cuánto tardaron en abrir desde el primer envío de la campaña
 const OPEN_DELAYS = [
@@ -51,7 +51,7 @@ const NOTES = {
 const dash = <span className="text-slate-300">—</span>;
 const when = (date) => (date ? formatFechaHora(date) : dash);
 const ctorOf = (r) => (r.opens > 0 ? `${Math.min(percent(r.clicks, r.opens), 100)}%` : '—');
-const faseCell = (r) => (r.inCrm ? `Fase ${r.fase}` : dash);
+const faseCell = (r) => (r.inCrm ? faseLabel(r.fase) : dash);
 const statusCell = (r) => (r.inCrm ? r.status : 'Ya no está en la base');
 const flagCell = (r) => { const flag = r.flag || DELIVERED_FLAG; return <span className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${flag.tone}`}>{flag.label}</span>; };
 
@@ -100,7 +100,7 @@ function Report({ nombre }) {
       const lead = leadByEmail.get(row.email);
       const flag = deliveryFlag(row.email, deliverability);
       const replied = isReplied(lead?.status);
-      return { ...row, fase: faseOf(lead), status: lead?.status || 'Pendiente', inCrm: !!lead, nombre: lead?.nombre || '', empresa: lead?.empresa || '', flag, problem: deliveryEvent(row.email, deliverability), replied };
+      return { ...row, fase: faseOf(lead), status: estadoLabel(lead?.status), inCrm: !!lead, nombre: lead?.nombre || '', empresa: lead?.empresa || '', flag, problem: deliveryEvent(row.email, deliverability), replied };
     }).sort((a, b) => b.clicks - a.clicks || b.opens - a.opens || a.email.localeCompare(b.email));
   }, [filteredLogs, leads, deliverability]);
 
@@ -152,7 +152,7 @@ function Report({ nombre }) {
 
   const exportRows = (list, label) => downloadCsv(`${nombre}-${label}-${toDayKey(new Date())}.csv`, [
     ['Correo', 'Nombre', 'Empresa', 'Fase', 'Estado', 'Entrega', 'Aperturas', 'Clics', 'Motivo'],
-    ...list.map(r => [r.email, r.nombre, r.empresa, r.fase, r.status, r.flag?.label || 'Entregado', r.opens, r.clicks, r.problem?.reason || '']),
+    ...list.map(r => [r.email, r.nombre, r.empresa, faseLabel(r.fase), r.status, r.flag?.label || 'Entregado', r.opens, r.clicks, r.problem?.reason || '']),
   ]);
 
   const openLead = (email) => navigate(`/audiencia?abrir=${encodeURIComponent(email)}`);
@@ -214,7 +214,7 @@ function Report({ nombre }) {
                 <tbody>
                   {byFase.map(g => (
                     <tr key={g.fase} className="border-b border-slate-100 last:border-0">
-                      <td className="py-2.5 px-5 font-medium text-slate-900 whitespace-nowrap">Fase {g.fase}</td>
+                      <td className="py-2.5 px-5 font-medium text-slate-900 whitespace-nowrap">{faseLabel(g.fase)}</td>
                       <td className="py-2.5 px-5 text-right tabular-nums text-slate-600">{g.total}</td>
                       <td className="py-2.5 px-5"><RateBar value={g.openRate} tip={`${g.openCount}`} /></td>
                       <td className="py-2.5 px-5"><RateBar value={g.clickRate} tip={`${g.clickCount}`} /></td>
@@ -310,7 +310,7 @@ function Report({ nombre }) {
                       <span className="block font-medium text-slate-900">{r.email}</span>
                       {(r.nombre || r.empresa) && <span className="block text-xs text-slate-500">{[r.nombre, r.empresa].filter(Boolean).join(' · ')}</span>}
                       <span className="sm:hidden mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-                        {r.inCrm ? `Fase ${r.fase}` : 'Fuera de la base'} · {r.opens} aperturas · {r.clicks} clics
+                        {r.inCrm ? faseLabel(r.fase) : 'Fuera de la base'} · {r.opens} aperturas · {r.clicks} clics
                         {r.flag && <span className={`rounded-md px-1.5 py-0.5 font-medium ${r.flag.tone}`}>{r.flag.label}</span>}
                       </span>
                     </td>
