@@ -42,3 +42,25 @@ Rebote suave (`status=failed`): ya no retira al prospecto; solo el rebote duro (
 
 ## No disponible todavía
 - **Spam**: el envío es por SMTP propio, no hay aviso de quejas. Se necesitaría un proveedor con feedback loop (SES, Mailgun, etc.).
+
+## Difusión manual con dos formatos y separación IA / manual (5 de noviembre)
+
+Hecho en el backend (`jair-chaguay/Mhorizon`, carpeta `backend`):
+| Qué | Dónde |
+|---|---|
+| `POST /campaign/manual` acepta `formato` (`personal` o `campana`) y lo guarda en `tareas_envio.formato` | `CampaignController@encolarEnvioManual` + migración `2026_11_05_100000_add_formato_to_tareas_envio_table` |
+| Las imágenes del correo con diseño llegan como `data:image` (Gmail no las muestra). Al encolar se guardan en `storage/app/public/campanas/img/<sha1>.<ext>` y se cambian por su enlace público | `CampaignController@publicarImagenes` |
+| `GET /tracking/dashboard` devuelve `campaign_types`: `{ asunto: 'personal' \| 'campana' }` con las campañas de Difusión manual; el resto son de la secuencia de la IA | `TrackingController@tiposDeCampana` |
+
+Para que funcione en el servidor:
+- `php artisan migrate` y `php artisan storage:link`; `APP_URL` con el dominio público (https), porque los enlaces de las imágenes se arman con `asset()`.
+- Subir el límite del POST: las imágenes en base64 pesan un 33% más. Por ejemplo `post_max_size = 25M` y `upload_max_filesize = 25M` en PHP, y `client_max_body_size 25m;` si hay nginx.
+
+El frontend usa `campaign_types` en Campañas (filtro "Secuencia IA" / "Difusiones" y una etiqueta en cada fila). Si el servidor no lo envía, la página se ve como antes.
+
+## Pendiente en el worker de Python (`MhorizonIA`, no está en estos repositorios)
+Regla acordada: un prospecto recibe un correo por fase de la IA y, aparte, todos los envíos manuales que se hagan. Los manuales no cuentan para la secuencia.
+1. **Los envíos manuales (`tareas_envio.tipo = 'manual'`) no deben cambiar `leadss.fase`, `leadss.status` ni `envios_fase_actual`.** Solo registran el envío (`/track/register`). Si hoy escriben "Contactado (Fase N)", alguien que estaba "Conversando con IA" pierde ese estado.
+2. **Respuestas a un envío manual.** Cuando alguien responde un informativo o un calendario, el agente IMAP no debería contestarle como si fuera parte de la secuencia de su fase. Propuesta: buscar a qué campaña responde (el asunto sin "Re:") y, si está en `tareas_envio` con `tipo = 'manual'`, derivarla al equipo ("Derivado a Equipo") en lugar de que responda la IA.
+3. **Clics en los botones.** Los botones e imágenes con enlace del correo con diseño son `<a href="https://...">` normales. El worker debe cambiarlos por `/track/click?email=...&campaign=...&url=...` igual que los enlaces del correo personal. Los `href="#"` (botón sin enlace) se dejan como están.
+4. **No envolver el cuerpo.** En `formato = 'campana'` el cuerpo ya trae su diseño completo (fondo, columna de 600 px y pie). Solo se agregan el píxel de apertura y el enlace de baja al final.

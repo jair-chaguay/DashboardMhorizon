@@ -27,6 +27,15 @@ function loadNameMode() {
   try { return window.localStorage.getItem(NAME_MODE_KEY) === 'original' ? 'original' : 'alias'; } catch { return 'alias'; }
 }
 
+// Origen de la campaña: la secuencia por fases de la IA o un envío de Difusión manual
+const TIPOS = [
+  ['todas', 'Todas'],
+  ['ia', 'Secuencia IA'],
+  ['manual', 'Difusiones'],
+];
+const TIPO_LABEL = { ia: 'Secuencia IA', manual: 'Difusión' };
+const FORMATO_LABEL = { personal: 'correo personal', campana: 'con diseño' };
+
 const COMPARE_ROWS = [
   ['sent', 'Destinatarios', (v) => v],
   ['openRate', 'Apertura', (v) => `${v}%`],
@@ -60,6 +69,7 @@ export default function Campaigns() {
   const [selected, setSelected] = useState([]);
   const [compareOpen, setCompareOpen] = useState(false);
   const [nameMode, setNameMode] = useState(loadNameMode);
+  const [tipo, setTipo] = useState('todas');
 
   const changeNameMode = (mode) => {
     setNameMode(mode);
@@ -67,9 +77,14 @@ export default function Campaigns() {
   };
 
   // El nombre provisional solo cambia lo que se ve; camp.name sigue identificando la campaña
-  const campaignsSummary = useMemo(() => rawSummary.map(c => ({
-    ...c, displayName: nameMode === 'alias' && c.alias ? c.alias : c.name,
-  })), [rawSummary, nameMode]);
+  // El filtro por origen aplica a toda la página: indicadores, tendencia y tabla
+  const hasTipos = rawSummary.some(c => c.tipo);
+  const campaignsSummary = useMemo(() => rawSummary
+    .filter(c => tipo === 'todas' || c.tipo === tipo)
+    .map(c => ({ ...c, displayName: nameMode === 'alias' && c.alias ? c.alias : c.name })), [rawSummary, nameMode, tipo]);
+  const countByTipo = useMemo(() => ({
+    todas: rawSummary.length, ia: rawSummary.filter(c => c.tipo === 'ia').length, manual: rawSummary.filter(c => c.tipo === 'manual').length,
+  }), [rawSummary]);
 
   const editAlias = async (camp) => {
     const alias = await promptText({
@@ -118,8 +133,8 @@ export default function Campaigns() {
   const columns = COLUMNS.filter(col => !col.delivery || hasDelivery);
 
   const exportCsv = () => downloadCsv(`campanas-${toDayKey(new Date())}.csv`, [
-    ['Campaña', 'Nombre provisional', 'Asunto', 'Último movimiento', 'Destinatarios', 'Entregados', 'Apertura (%)', 'Clics (%)', 'CTOR (%)', 'Rebotes duros', 'Rebotes suaves', 'Desuscritos', 'Spam', 'Respondieron'],
-    ...rows.map(c => [c.name, c.alias, c.subject, c.dateStr, c.sent, c.delivered, c.openRate, c.clickRate, c.ctor, c.hardBounces, c.softBounces, c.unsubscribed, c.spam, c.replies]),
+    ['Campaña', 'Nombre provisional', 'Origen', 'Asunto', 'Último movimiento', 'Destinatarios', 'Entregados', 'Apertura (%)', 'Clics (%)', 'CTOR (%)', 'Rebotes duros', 'Rebotes suaves', 'Desuscritos', 'Spam', 'Respondieron'],
+    ...rows.map(c => [c.name, c.alias, c.tipo ? TIPO_LABEL[c.tipo] : '', c.subject, c.dateStr, c.sent, c.delivered, c.openRate, c.clickRate, c.ctor, c.hardBounces, c.softBounces, c.unsubscribed, c.spam, c.replies]),
   ]);
 
   const openReport = (name) => navigate(`/campanas/${encodeURIComponent(name)}`);
@@ -189,6 +204,16 @@ export default function Campaigns() {
             <input value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} placeholder="Buscar campaña..." aria-label="Buscar campaña"
               className={`${ui.input} w-full sm:w-72 pl-9`} />
           </div>
+          {hasTipos && (
+            <div role="group" aria-label="Origen de la campaña" className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+              {TIPOS.map(([key, label]) => (
+                <button key={key} onClick={() => { setTipo(key); setCurrentPage(1); setSelected([]); }} aria-pressed={tipo === key}
+                  className={`px-3 h-8 rounded-md text-sm font-semibold cursor-pointer transition-colors ${tipo === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>
+                  {label} <span className="font-normal text-slate-400 tabular-nums">{countByTipo[key]}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <select className={selectClass} value={`${sort.key}:${sort.dir}`} aria-label="Ordenar"
             onChange={(e) => { const [key, dir] = e.target.value.split(':'); setSort({ key, dir }); }}>
             <option value="lastDate:desc">Más recientes primero</option>
@@ -244,6 +269,11 @@ export default function Campaigns() {
                     {camp.alias && (
                       <span className="block max-w-64 truncate text-xs text-slate-400" title={nameMode === 'alias' ? camp.name : camp.alias}>
                         {nameMode === 'alias' ? `Original: ${camp.name}` : `Provisional: ${camp.alias}`}
+                      </span>
+                    )}
+                    {camp.tipo && (
+                      <span className={`mt-0.5 inline-block rounded px-1.5 py-px text-[11px] font-semibold ${camp.tipo === 'ia' ? 'bg-navy-50 text-navy-700' : 'bg-brand-50 text-brand-700'}`}>
+                        {TIPO_LABEL[camp.tipo]}{camp.formato ? ` · ${FORMATO_LABEL[camp.formato]}` : ''}
                       </span>
                     )}
                     {camp.subject && camp.subject !== camp.displayName && <span className="block max-w-64 truncate text-xs text-slate-500" title={camp.subject}>{camp.subject}</span>}
