@@ -28,6 +28,7 @@ const modulosQuill = {
   ],
 };
 
+// El envío llega a los prospectos activos: los de fase 99 ya terminaron su secuencia
 const FASES = [1, 2, 3, 4, 5];
 const BORRADOR_KEY = 'mhorizon:borrador-difusion';
 const PLANTILLAS_KEY = 'mhorizon:plantillas';
@@ -59,7 +60,6 @@ const PLANTILLAS_BASE = [
 const isEmptyBody = (html) => !/<img/i.test(html) && html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() === '';
 // Se separan párrafos, listas y saltos de línea con un espacio para que el texto no quede pegado
 const htmlToText = (html) => new DOMParser().parseFromString(html.replace(/<\/(p|li|h[1-6]|div)>|<br\s*\/?>/gi, ' $&'), 'text/html').body.textContent || '';
-const faseOf = (lead) => Math.min(lead.fase || 1, 5);
 
 // El borrador y las plantillas viven solo en este navegador; si el almacenamiento falla, el formulario sigue funcionando
 function leerBorrador() {
@@ -70,7 +70,7 @@ function leerBorrador() {
     return {
       asunto: typeof data.asunto === 'string' ? data.asunto : '',
       cuerpo: typeof data.cuerpo === 'string' ? data.cuerpo : '',
-      fase: FASES.includes(data.fase) ? data.fase : 1,
+      nombreCampana: typeof data.nombreCampana === 'string' ? data.nombreCampana : '',
       etiquetas: Array.isArray(data.etiquetas) ? data.etiquetas : [],
     };
   } catch {
@@ -121,7 +121,7 @@ export default function ManualBroadcast() {
 
   const [asunto, setAsunto] = useState(borrador?.asunto ?? '');
   const [cuerpo, setCuerpo] = useState(borrador?.cuerpo ?? '');
-  const [fase, setFase] = useState(borrador?.fase ?? 1);
+  const [nombreCampana, setNombreCampana] = useState(borrador?.nombreCampana ?? '');
   const [selectedTags, setSelectedTags] = useState(borrador?.etiquetas ?? []);
   const [archivos, setArchivos] = useState([]);
   const [isSending, setIsSending] = useState(false);
@@ -141,27 +141,25 @@ export default function ManualBroadcast() {
     if (primerRender.current) { primerRender.current = false; return; }
     const timer = setTimeout(() => {
       if (asunto === '' && isEmptyBody(cuerpo)) { borrarBorrador(); setGuardadoA(null); return; }
-      guardarBorrador({ asunto, cuerpo, fase, etiquetas: selectedTags });
+      guardarBorrador({ asunto, cuerpo, nombreCampana, etiquetas: selectedTags });
       setGuardadoA(new Date());
     }, 600);
     return () => clearTimeout(timer);
-  }, [asunto, cuerpo, fase, selectedTags]);
+  }, [asunto, cuerpo, nombreCampana, selectedTags]);
 
-  // Cuántos prospectos hay en cada fase (para mostrarlo en los botones)
-  const faseCounts = useMemo(() => {
-    const counts = Object.fromEntries(FASES.map(f => [f, 0]));
-    leads.forEach(l => { counts[faseOf(l)] += 1; });
-    return counts;
-  }, [leads]);
-
-  // Público: los de la fase elegida que tengan al menos una de las etiquetas
+  // Público: los prospectos activos que tengan al menos una de las etiquetas
   const publico = useMemo(() => leads.filter(l => {
-    if (faseOf(l) !== fase) return false;
-    if (selectedTags.length === 0) return true;
+    if (!FASES.includes(Number(l.fase))) return false;
     const tags = parseTags(l.etiquetas);
     return selectedTags.some(t => tags.includes(t));
-  }), [leads, fase, selectedTags]);
+  }), [leads, selectedTags]);
   const maxDestinatarios = publico.length;
+  // El mismo nombre que arma el servidor si no se escribe uno
+  const nombreAutomatico = useMemo(() => {
+    const fases = [...new Set(publico.map(l => Number(l.fase)))].sort((a, b) => a - b);
+    if (fases.length === 0) return '';
+    return `Campaña Etiquetas ${selectedTags.join(', ')} ${fases.length === 1 ? 'Fase' : 'Fases'} ${fases.join(', ')}`;
+  }, [publico, selectedTags]);
   // Del público, cuántos rebotaron (duro) o se dieron de baja: el servidor debería dejarlos fuera
   const noEnviables = useMemo(() => publico.filter(l => deliverability.hard.has(l.email) || deliverability.unknown.has(l.email) || deliverability.unsub.has(l.email) || deliverability.spam.has(l.email)).length, [publico, deliverability]);
 
@@ -183,7 +181,7 @@ export default function ManualBroadcast() {
   const checks = [
     { state: asunto.trim() ? 'ok' : 'pending', text: asunto.trim() ? 'Asunto escrito' : 'Falta el asunto' },
     { state: cuerpoVacio ? 'pending' : 'ok', text: cuerpoVacio ? 'Falta el mensaje' : 'Mensaje escrito' },
-    { state: maxDestinatarios > 0 ? 'ok' : 'warn', text: maxDestinatarios > 0 ? `Público elegido: hasta ${maxDestinatarios}` : 'Ningún prospecto con esa fase y etiquetas' },
+    { state: selectedTags.length === 0 ? 'pending' : maxDestinatarios > 0 ? 'ok' : 'warn', text: selectedTags.length === 0 ? 'Falta elegir etiquetas' : maxDestinatarios > 0 ? `Público elegido: hasta ${maxDestinatarios}` : 'Ningún prospecto con esas etiquetas' },
     { state: enlaces > 0 ? 'ok' : 'warn', text: enlaces > 0 ? `${enlaces} ${enlaces === 1 ? 'enlace' : 'enlaces'} para medir clics` : 'Sin enlaces: no se podrán medir clics' },
     { state: asunto.length <= ASUNTO_IDEAL ? 'ok' : 'warn', text: asunto.length <= ASUNTO_IDEAL ? 'Asunto de buen largo' : `Asunto largo (${asunto.length} caracteres)` },
     { state: pesoKb <= PESO_MAX_KB ? 'ok' : 'warn', text: pesoKb <= PESO_MAX_KB ? 'Peso del correo adecuado' : `Pesa ${pesoKb} KB: Gmail recorta lo que pasa de 102 KB` },
@@ -212,7 +210,7 @@ export default function ManualBroadcast() {
     borrarBorrador();
     setAsunto('');
     setCuerpo('');
-    setFase(1);
+    setNombreCampana('');
     setSelectedTags([]);
     setRestaurado(false);
     setGuardadoA(null);
@@ -254,14 +252,16 @@ export default function ManualBroadcast() {
 
   const handleDespachar = async (e) => {
     e.preventDefault();
+    if (selectedTags.length === 0) {
+      setMessage({ type: 'error', text: 'Elige al menos una etiqueta.' });
+      return;
+    }
     if (cuerpoVacio) {
       setMessage({ type: 'error', text: 'El cuerpo del correo está vacío.' });
       return;
     }
 
-    const destino = selectedTags.length > 0
-      ? `los prospectos de la Fase ${fase} con etiqueta: ${selectedTags.join(', ')}`
-      : `TODOS los prospectos de la Fase ${fase}`;
+    const destino = `los prospectos con etiqueta: ${selectedTags.join(', ')}`;
     const avisos = checks.filter(c => c.state === 'warn').map(c => c.text);
     const confirmed = await confirmAction({
       title: '¿Enviar campaña?',
@@ -276,12 +276,9 @@ export default function ManualBroadcast() {
     const formData = new FormData();
     formData.append('asunto', asunto);
     formData.append('cuerpo', cuerpo);
-    formData.append('fase', fase);
-
-    // Si escribió una etiqueta opcional, la enviamos al backend
-    if (selectedTags.length > 0) {
-      formData.append('etiqueta', selectedTags.join(','));
-    }
+    formData.append('etiqueta', selectedTags.join(','));
+    // Si queda vacío, el servidor arma "Campaña Etiquetas ... Fase ..."
+    if (nombreCampana.trim()) formData.append('nombre_provisional', nombreCampana.trim());
 
     archivos.forEach(archivo => formData.append('adjuntos[]', archivo));
 
@@ -293,6 +290,7 @@ export default function ManualBroadcast() {
       setMessage({ type: 'success', text: 'Campaña encolada con éxito.' });
       setAsunto('');
       setCuerpo('');
+      setNombreCampana('');
       setSelectedTags([]);
       setArchivos([]);
       setRestaurado(false);
@@ -313,7 +311,7 @@ export default function ManualBroadcast() {
 
   return (
     <div>
-      <PageHeader description="Elige la fase y las etiquetas, redacta el correo y envíalo a ese público.">Difusión manual</PageHeader>
+      <PageHeader description="Elige las etiquetas, redacta el correo y envíalo a ese público.">Difusión manual</PageHeader>
 
       {restaurado && (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700 animate-fade-in">
@@ -326,30 +324,9 @@ export default function ManualBroadcast() {
 
       <form onSubmit={handleDespachar} className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
         <div className="space-y-5">
-          <Step n="1" title="Público objetivo" hint="Fase del CRM y, si quieres afinar, etiquetas.">
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-              {FASES.map(num => {
-                const activo = fase === num;
-                return (
-                  <button
-                    type="button"
-                    key={num}
-                    onClick={() => setFase(num)}
-                    aria-pressed={activo}
-                    className={`cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-colors ${activo
-                      ? 'bg-brand-50/60 border-brand-600 ring-1 ring-brand-600'
-                      : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
-                  >
-                    <span className={`block text-[13px] font-medium ${activo ? 'text-brand-700' : 'text-slate-500'}`}>Fase {num}</span>
-                    <span className="block mt-0.5 text-lg font-semibold text-slate-900 tabular-nums leading-tight">{faseCounts[num]} <span className="text-xs font-normal text-slate-500">prosp.</span></span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {availableTags.length > 0 && (
-              <div className="mt-5 pt-5 border-t border-slate-100">
-                <p className={`${ui.label} mb-2.5`}>Filtrar por etiqueta <span className="font-normal text-slate-500">(opcional)</span></p>
+          <Step n="1" title="Público objetivo" hint="El correo llega a los prospectos que tengan al menos una de las etiquetas.">
+            {availableTags.length > 0 ? (
+              <div>
                 <div className="flex flex-wrap gap-2">
                   {availableTags.map(tag => {
                     const activa = selectedTags.includes(tag);
@@ -363,9 +340,9 @@ export default function ManualBroadcast() {
                     );
                   })}
                 </div>
-                {selectedTags.length === 0 && <p className="text-[13px] text-slate-500 mt-3">Sin etiquetas: se enviará a todos los prospectos de la Fase {fase}.</p>}
+                {selectedTags.length === 0 && <p className="text-[13px] text-slate-500 mt-3">Elige al menos una etiqueta para poder enviar.</p>}
               </div>
-            )}
+            ) : <p className="text-[13px] text-slate-500">Aún no hay etiquetas. Agrégalas a tus prospectos para poder enviar.</p>}
           </Step>
 
           <Step n="2" title="Mensaje" hint="Puedes pegar imágenes directamente en el editor."
@@ -404,6 +381,20 @@ export default function ManualBroadcast() {
                 )}
               </div>
             )}>
+            <div className="mb-5">
+              <label htmlFor="nombre-campana" className={`${ui.label} block mb-2`}>Nombre de la campaña <span className="font-normal text-slate-500">(opcional)</span></label>
+              <input
+                id="nombre-campana"
+                type="text"
+                maxLength={255}
+                value={nombreCampana}
+                onChange={(e) => setNombreCampana(e.target.value)}
+                className={`${ui.input} w-full`}
+                placeholder={nombreAutomatico || 'Ej. Promo noviembre'}
+              />
+              <p className="text-xs text-slate-500 mt-1.5">Es un nombre provisional para organizarte; los prospectos solo ven el asunto.{nombreAutomatico && !nombreCampana.trim() ? ` Si lo dejas vacío se llamará "${nombreAutomatico}".` : ''}</p>
+            </div>
+
             <div className="flex items-center justify-between mb-2">
               <label htmlFor="asunto" className={ui.label}>Asunto</label>
               <span className={`text-xs tabular-nums ${asuntoLargo ? 'font-semibold text-amber-600' : 'text-slate-500'}`}>{asunto.length} caracteres</span>
@@ -493,13 +484,13 @@ export default function ManualBroadcast() {
         <aside className="lg:sticky lg:top-0">
           <Panel title="Resumen del envío" subtitle="Revisa antes de enviar">
             <dl className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <dt className="text-slate-500">Fase</dt>
-                <dd className="font-medium text-slate-900">Fase {fase}</dd>
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-slate-500">Campaña</dt>
+                <dd className="font-medium text-slate-900 text-right">{nombreCampana.trim() || nombreAutomatico || '—'}</dd>
               </div>
               <div className="flex items-start justify-between gap-4">
                 <dt className="text-slate-500">Etiquetas</dt>
-                <dd className="font-medium text-slate-900 text-right">{selectedTags.length > 0 ? selectedTags.join(', ') : 'Todas'}</dd>
+                <dd className="font-medium text-slate-900 text-right">{selectedTags.length > 0 ? selectedTags.join(', ') : '—'}</dd>
               </div>
               <div className="flex items-start justify-between gap-4">
                 <dt className="text-slate-500">Asunto</dt>
