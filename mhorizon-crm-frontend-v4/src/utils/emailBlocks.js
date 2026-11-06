@@ -20,9 +20,9 @@ export const imagenSegura = (url) => { const u = String(url || '').trim(); retur
 export const esIncrustada = (url) => /^data:image\//i.test(String(url || ''));
 
 // Outlook de escritorio (Windows) arma el correo con el motor de Word: ignora padding, margin, display y
-// border-radius en <a> y <div>, y también max-width. Por eso todo lo que da forma (márgenes, cajas, botones)
-// va en celdas de tabla con atributos (bgcolor, align, width), y el ancho de 600 px se fija con una tabla
-// que solo lee Outlook (comentarios <!--[if mso]>). Es la misma técnica que usan Mailchimp y Brevo
+// border-radius en <a> y <div>, y también max-width. Por eso todo lo que da forma (márgenes, cajas)
+// va en celdas de tabla con atributos (bgcolor, align, width), el ancho de 600 px se fija con una tabla
+// que solo lee Outlook (comentarios <!--[if mso]>) y los botones van en VML. Es la técnica de Mailchimp y Brevo
 const mso = (html) => `<!--[if mso]>${html}<![endif]-->`;
 const fuente = (size, alto = 1.6, extra = '') => `font-family:${FONT};font-size:${size}px;line-height:${Math.round(size * alto)}px;${extra}`;
 const tabla = (filas, extra = '') => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;${extra}">${filas}</table>`;
@@ -31,14 +31,22 @@ const fila = (contenido, padding, align = 'left') => tabla(`<tr>${celda(contenid
 const vacio = (texto, m) => fila(`<div style="border:2px dashed #cbd5e1;border-radius:6px;padding:36px 12px;text-align:center;${fuente(14, 1.4)}color:#64748b;background:#f8fafc">${esc(texto)}</div>`, `8px ${m}px`);
 const conEnlace = (html, url) => { const href = enlaceSeguro(url); return href ? `<a href="${esc(href)}" target="_blank" style="text-decoration:none">${html}</a>` : html; };
 
-// Botón "a prueba de Outlook": el color y el relleno van en la celda (mso-padding-alt es el relleno que lee Outlook)
-// y el enlace también lleva relleno para que en el resto de correos se pueda pulsar todo el botón
+// Botón "a prueba de Outlook", igual que Mailchimp: Outlook de escritorio recibe un rectángulo redondeado en VML
+// (su propio formato de dibujo) con el texto centrado en una sola línea; el resto de correos recibe una celda
+// con color, esquinas redondeadas y el enlace con relleno para que se pueda pulsar todo el botón
+const ALTO_BOTON = 46;
 const boton = (texto, url, color = C.orange) => {
   const href = esc(enlaceSeguro(url) || '#');
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;margin:0 auto"><tr>`
-    + `<td align="center" bgcolor="${color}" style="background:${color};border-radius:6px;mso-padding-alt:14px 26px">`
-    + `<a href="${href}" target="_blank" style="display:inline-block;padding:14px 26px;${fuente(15, 1.2, 'font-weight:bold;')}color:#ffffff;text-decoration:none;text-transform:uppercase;border-radius:6px">${esc(texto)}</a>`
+  const mayus = esc(String(texto).toUpperCase());
+  // Ancho para Outlook: el texto en negrita de 15 px ocupa unos 10,5 px por letra, más el relleno de los lados
+  const ancho = Math.ceil(String(texto).length * 10.5 + 56);
+  const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${href}" style="height:${ALTO_BOTON}px;v-text-anchor:middle;width:${ancho}px" arcsize="13%" stroke="f" fillcolor="${color}">`
+    + `<w:anchorlock/><center style="color:#ffffff;font-family:${FONT};font-size:15px;font-weight:bold;white-space:nowrap">${mayus}</center></v:roundrect>`;
+  const html = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;margin:0 auto"><tr>`
+    + `<td align="center" bgcolor="${color}" style="background:${color};border-radius:6px">`
+    + `<a href="${href}" target="_blank" style="display:inline-block;padding:14px 26px;${fuente(15, 1.2, 'font-weight:bold;')}color:#ffffff;text-decoration:none;text-transform:uppercase;white-space:nowrap;border-radius:6px">${esc(texto)}</a>`
     + '</td></tr></table>';
+  return mso(vml) + `<!--[if !mso]><!-->${html}<!--<![endif]-->`;
 };
 // Varios botones en una fila: en Outlook, una celda por botón con su separación; en el resto, bloques que
 // bajan a otra línea si no caben (celular)
@@ -118,7 +126,7 @@ const RENDER = {
       botones(b.botones, C.orange, 'center', 8) && celda(botones(b.botones, C.orange, 'center', 8), '0 0 12px', 'center'),
       logo && celda(`<img src="${esc(logo)}" alt="MHORIZON" width="110" style="display:inline-block;width:110px;height:auto;border:0">`, '0 0 12px', 'center'),
       redesHtml(b.redes) && celda(redesHtml(b.redes), '0', 'center'),
-      b.botonTexto && celda(boton(b.botonTexto, b.botonUrl, C.orange), '18px 0 4px', 'center'),
+      b.botonTexto && celda(grupo([boton(b.botonTexto, b.botonUrl, C.orange)], 'center', 0, 0), '18px 0 4px', 'center'),
       b.copyright && texto(conSaltos(b.copyright), 12, '18px 0 6px', 'font-style:italic;'),
       b.mensaje && texto(conSaltos(b.mensaje), 12, '0 0 6px'),
       b.direccion && texto(conSaltos(b.direccion), 12, '8px 0 0'),
