@@ -139,13 +139,13 @@ const RENDER = {
 
 export const renderBloque = (bloque, estilos = ESTILOS_BASE) => (RENDER[bloque.tipo] ? RENDER[bloque.tipo](bloque, Number(estilos.margen) || 0) : '');
 
-// Correo completo: fondo exterior y columna blanca de 600 px. El fondo va como bgcolor de una tabla
+// Correo completo: columna blanca de 600 px con márgenes de color solo a los lados (arriba y abajo va al ras). El fondo va como bgcolor de una tabla
 // (Outlook no pinta el fondo de un <div>) y el ancho se fija para Outlook con una tabla de 600 px
 export function renderCorreo(bloques, { estilos = ESTILOS_BASE } = {}) {
   const fondo = estilos.fondo || ESTILOS_BASE.fondo;
   const cuerpo = bloques.map(b => renderBloque(b, estilos)).join('');
   const columna = `<table role="presentation" align="center" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="border-collapse:collapse;width:100%;max-width:${ANCHO_CORREO}px;margin:0 auto;background:#ffffff">${cuerpo ? `<tr><td>${cuerpo}</td></tr>` : ''}</table>`;
-  return tabla(`<tr><td align="center" bgcolor="${fondo}" style="padding:32px 12px;background:${fondo}">`
+  return tabla(`<tr><td align="center" bgcolor="${fondo}" style="padding:0 12px;background:${fondo}">`
     + mso(`<table role="presentation" align="center" width="${ANCHO_CORREO}" cellpadding="0" cellspacing="0" border="0"><tr><td width="${ANCHO_CORREO}">`)
     + columna
     + mso('</td></tr></table>')

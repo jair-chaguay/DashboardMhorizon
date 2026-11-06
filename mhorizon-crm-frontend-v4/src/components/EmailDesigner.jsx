@@ -524,9 +524,10 @@ export default function EmailDesigner({ bloques: bloquesIniciales, estilos: esti
         {/* Correo */}
         <main className="order-1 lg:order-2 min-h-0 flex-1 overflow-auto transition-colors" style={{ background: estilos.fondo }}
           onClick={() => setSeleccion(null)}>
-          {/* Los márgenes de color siempre se ven y la columna no se encoge: si la pantalla es angosta, se desplaza */}
-          <div className="w-max min-w-full px-4 py-6 sm:px-12 sm:py-10">
-            <div className="relative mx-auto bg-white shadow-sm transition-[width] duration-300" style={{ width: ancho }}
+          {/* Márgenes de color solo a los lados; arriba y abajo la columna va al ras. Siempre se ven y la columna
+              no se encoge: si la pantalla es angosta, se desplaza */}
+          <div className="flex min-h-full w-max min-w-full flex-col px-4 sm:px-12">
+            <div className="relative mx-auto flex-1 bg-white shadow-sm transition-[width] duration-300" style={{ width: ancho }}
               onDragOver={alArrastrarSobre} onDrop={alSoltar}
               onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDestino(null); }}
               onClickCapture={(e) => { if (e.target.closest('a')) e.preventDefault(); }}>
@@ -542,7 +543,7 @@ export default function EmailDesigner({ bloques: bloquesIniciales, estilos: esti
                       onClick={(e) => { e.stopPropagation(); setSeleccion(b.id); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) setSeleccion(b.id); }}
                       className={`group relative cursor-pointer outline-offset-[-1px] ${activo ? 'outline outline-2 outline-navy-700' : 'hover:outline hover:outline-1 hover:outline-navy-700/50'}`}>
-                      {(activo) && <span className="absolute left-0 -top-5 z-10 rounded-t-md bg-navy-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">{NOMBRE_TIPO[b.tipo]}</span>}
+                      {(activo) && <span className={`absolute left-0 z-10 ${i === 0 ? 'top-0 rounded-br-md' : '-top-5 rounded-t-md'} bg-navy-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white`}>{NOMBRE_TIPO[b.tipo]}</span>}
                       <div dangerouslySetInnerHTML={{ __html: renderBloque(b, estilos) }} />
                       {/* Herramientas al costado, fuera del correo (dentro en celular) */}
                       <div className={`absolute top-0 z-10 flex-col gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 shadow-md right-1 sm:right-auto sm:left-full sm:ml-2 ${activo ? 'flex' : 'hidden group-hover:flex'}`}>
