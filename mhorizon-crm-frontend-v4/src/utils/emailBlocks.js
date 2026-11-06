@@ -6,10 +6,11 @@ const C = { navy: '#171E27', orange: '#D4681C', text: '#1f2937', muted: '#4b5563
 const FONT = 'Arial, Helvetica, sans-serif';
 export const ANCHO_CORREO = 600;
 
-// Fondo exterior y margen lateral: lo que hace que se vea como campaña y no como un correo escrito
+// Fondo exterior: los márgenes laterales de color alrededor de la columna de 600 px, como en Mailchimp.
+// Siempre están y no cambian de tamaño; solo se elige su color. Dentro de la columna, el contenido deja 24 px
+// a cada lado (salvo las imágenes "borde a borde", que llegan al borde de la columna y nunca la pasan)
 export const ESTILOS_BASE = { fondo: '#eef0f3', margen: 24 };
 export const FONDOS = [['#eef0f3', 'Gris claro'], ['#ffffff', 'Blanco'], ['#fdf4ec', 'Crema'], ['#171e27', 'Azul oscuro']];
-export const MARGENES = [0, 16, 24, 32, 40];
 export const COLORES_BOTON = { naranja: C.orange, azul: C.navy };
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -214,5 +215,5 @@ export const sinImagenesIncrustadas = (html) => html.replace(/data:image\/[a-z+]
 export const bloquesValidos = (lista) => (Array.isArray(lista) ? lista.filter(b => b && typeof b === 'object' && NOMBRE_TIPO[b.tipo] && typeof b.id === 'string') : []);
 export const estilosValidos = (e) => ({
   fondo: FONDOS.some(([f]) => f === e?.fondo) ? e.fondo : ESTILOS_BASE.fondo,
-  margen: MARGENES.includes(Number(e?.margen)) ? Number(e.margen) : ESTILOS_BASE.margen,
+  margen: ESTILOS_BASE.margen,
 });
