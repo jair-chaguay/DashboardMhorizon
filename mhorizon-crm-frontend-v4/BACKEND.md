@@ -70,7 +70,7 @@ Hecho en el backend (`jair-chaguay/Mhorizon`, carpeta `backend`):
 | `GET /campaign/reutilizables`: difusiones enviadas (la última de cada campaña) con `nombre`, `alias`, `formato`, `fecha` y `reutilizable` | `CampaignController@reutilizables` |
 | `GET /campaign/diseno?nombre=`: el diseño de esa difusión (`cuerpo` del correo personal o `diseno` con bloques y estilos) | `CampaignController@diseno` |
 
-Para que funcione en el servidor: `php artisan migrate`. Las campañas con diseño enviadas antes de esta versión no guardaron sus bloques, así que no se pueden reutilizar (el frontend las muestra desactivadas). Si el servidor aún no tiene estas rutas, Difusión manual envía desde la cuenta principal como antes.
+Para que funcione en el servidor: `php artisan migrate`. Las campañas con diseño enviadas antes de esta versión no guardaron sus bloques: el frontend los rearma desde el HTML enviado (`src/utils/emailParse.js`). Si `tareas_envio.formato` quedó vacío (envíos hechos antes de correr la migración del formato), el servidor reconoce el correo con diseño porque su cuerpo tiene tablas (`CampaignController::sqlFormato`). Si el servidor aún no tiene estas rutas, Difusión manual envía desde la cuenta principal como antes.
 
 ## Pendiente en el worker de Python (`MhorizonIA`, no está en estos repositorios)
 Regla acordada: un prospecto recibe un correo por fase de la IA y, aparte, todos los envíos manuales que se hagan. Los manuales no cuentan para la secuencia.
