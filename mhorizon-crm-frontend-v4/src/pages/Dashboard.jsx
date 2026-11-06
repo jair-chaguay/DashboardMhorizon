@@ -9,7 +9,8 @@ import EmptyState from '../components/EmptyState';
 import { DeliveryStrip } from '../components/Deliverability';
 import DeviceHourCharts from '../components/Charts';
 import { BarRow, LegendDot, Panel, Stat, StatGrid } from '../components/analytics';
-import { COLORS, tooltipStyle, axisTick, selectClass, ui } from '../utils/theme';
+import { COLORS, tooltipStyle, axisTick, ui } from '../utils/theme';
+import Select from '../components/Select';
 import { useDashboardMetrics } from '../hooks/useDashboardMetrics';
 import { estadoLabel, faseLabel } from '../utils/status';
 import { formatHora, timeAgo, toDayKey } from '../utils/dates';
@@ -75,13 +76,9 @@ export default function Dashboard() {
 
   const filters = (
     <>
-      <select className={`${selectClass} max-w-56`} value={campaignSearch} onChange={(e) => pickCampaign(e.target.value)} aria-label="Campaña">
-        <option value="">Todas las campañas</option>
-        {uniqueCampaigns.map(name => <option key={name} value={name}>{name}</option>)}
-      </select>
-      <select className={selectClass} value={dateFilter} onChange={(e) => pickPeriod(e.target.value)} aria-label="Periodo">
-        {PERIODS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </select>
+      <Select label="Campaña" align="right" className="w-56" value={campaignSearch} onChange={pickCampaign}
+        options={[['', 'Todas las campañas'], ...uniqueCampaigns.map(name => [name, name])]} />
+      <Select label="Periodo" align="right" className="w-44" value={dateFilter} onChange={pickPeriod} options={PERIODS} />
       <button onClick={fetchData} disabled={loading} title="Actualizar datos" aria-label="Actualizar datos" className={ui.iconBtn}>
         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
       </button>

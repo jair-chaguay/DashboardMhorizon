@@ -57,7 +57,20 @@ Para que funcione en el servidor:
 - `php artisan migrate` y `php artisan storage:link`; `APP_URL` con el dominio público (https), porque los enlaces de las imágenes se arman con `asset()`.
 - Subir el límite del POST: las imágenes en base64 pesan un 33% más. Por ejemplo `post_max_size = 25M` y `upload_max_filesize = 25M` en PHP, y `client_max_body_size 25m;` si hay nginx.
 
-El frontend usa `campaign_types` en Campañas (filtro "Secuencia IA" / "Difusiones" y una etiqueta en cada fila). Si el servidor no lo envía, la página se ve como antes.
+El frontend usa `campaign_types` en Campañas (filtro "Secuencia IA" / "Difusiones") y en el reporte de la campaña (botón "Reutilizar diseño"). Si el servidor no lo envía, la página se ve como antes.
+
+## Remitentes y reutilizar el diseño de una campaña (6 de noviembre)
+
+Hecho en el backend (`jair-chaguay/Mhorizon`, carpeta `backend`):
+| Qué | Dónde |
+|---|---|
+| Tabla `remitentes` (correo, nombre visible y datos SMTP opcionales; la contraseña se guarda cifrada con `Crypt`). Se crea con `consultores@mhorizon.com.ec` / "MHORIZON ECUADOR" como principal | migración `2026_11_06_100000_create_remitentes_table` |
+| `GET /remitentes` (nunca devuelve la contraseña), `POST /remitentes`, `DELETE /remitentes/{id}` (siempre queda al menos uno) | `RemitenteController` |
+| `POST /campaign/manual` acepta `remitente_id`, `remitente_nombre` (el nombre que ve el destinatario) y `diseno` (JSON con los bloques del editor). Guarda en `tareas_envio`: `remitente_id`, `remitente_email`, `remitente_nombre` y `diseno` (sus imágenes también se publican) | `CampaignController@encolarEnvioManual` + migración `2026_11_06_100100_add_diseno_y_remitente_to_tareas_envio_table` |
+| `GET /campaign/reutilizables`: difusiones enviadas (la última de cada campaña) con `nombre`, `alias`, `formato`, `fecha` y `reutilizable` | `CampaignController@reutilizables` |
+| `GET /campaign/diseno?nombre=`: el diseño de esa difusión (`cuerpo` del correo personal o `diseno` con bloques y estilos) | `CampaignController@diseno` |
+
+Para que funcione en el servidor: `php artisan migrate`. Las campañas con diseño enviadas antes de esta versión no guardaron sus bloques, así que no se pueden reutilizar (el frontend las muestra desactivadas). Si el servidor aún no tiene estas rutas, Difusión manual envía desde la cuenta principal como antes.
 
 ## Pendiente en el worker de Python (`MhorizonIA`, no está en estos repositorios)
 Regla acordada: un prospecto recibe un correo por fase de la IA y, aparte, todos los envíos manuales que se hagan. Los manuales no cuentan para la secuencia.
@@ -66,3 +79,4 @@ Regla acordada: un prospecto recibe un correo por fase de la IA y, aparte, todos
 3. **Clics en los botones.** Los botones e imágenes con enlace del correo con diseño son `<a href="https://...">` normales. El worker debe cambiarlos por `/track/click?email=...&campaign=...&url=...` igual que los enlaces del correo personal. Los `href="#"` (botón sin enlace) se dejan como están.
 4. **No envolver el cuerpo.** En `formato = 'campana'` el cuerpo ya trae su diseño completo (fondo, columna de 600 px y pie). Solo se agrega el píxel de apertura.
 5. **Enlace de baja del pie.** El pie del correo con diseño termina con un enlace discreto "darte de baja aquí" con `href="{{enlace_baja}}"`. Por cada destinatario, el worker cambia `{{enlace_baja}}` por su enlace de baja (`/track/unsubscribe?email=...&campaign=...`, el mismo que ya arma para "date de baja aquí"), antes de cambiar los demás enlaces por `/track/click`. Si el cuerpo trae `{{enlace_baja}}`, no se agrega el enlace de baja propio al final, para que no salga dos veces. Las cabeceras `List-Unsubscribe` se mantienen.
+6. **Remitente.** Cada tarea manual trae `remitente_email` y `remitente_nombre`. La cabecera `From` debe ser `"remitente_nombre" <remitente_email>` (con `email.utils.formataddr` para que las tildes salgan bien) y `Reply-To` el mismo correo. Si el remitente tiene `smtp_host` en la tabla `remitentes`, se envía con esa cuenta (`smtp_port`, `smtp_usuario` y `smtp_password`; la contraseña está cifrada con el `Crypt` de Laravel y se descifra con la `APP_KEY`, o se pide a Laravel por una ruta interna). Si no tiene `smtp_host`, se envía con la cuenta principal; en ese caso el correo del remitente debe ser del mismo dominio y estar permitido en el servidor de correo (SPF/DKIM), o algunos buzones lo marcarán como spam. Si la tarea no trae remitente (tareas viejas), se usa la cuenta principal como hasta ahora.
