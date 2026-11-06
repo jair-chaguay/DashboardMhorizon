@@ -9,7 +9,7 @@ import { formatSize } from '../utils/files';
 import { leerImagen, pesoDataUrl, TIPOS_IMAGEN } from '../utils/images';
 import { EMAIL_ASSETS } from '../utils/emailAssets';
 import {
-  ANCHO_CORREO, TIPOS_BLOQUE, NOMBRE_TIPO, FONDOS, MARGENES, REDES, crearBloque, duplicarBloque, renderBloque, esIncrustada, imagenSegura, BAJA_BASE,
+  ANCHO_CORREO, TIPOS_BLOQUE, NOMBRE_TIPO, FONDOS, REDES, crearBloque, duplicarBloque, renderBloque, esIncrustada, imagenSegura, BAJA_BASE,
 } from '../utils/emailBlocks';
 
 const ICONO = {
@@ -179,7 +179,7 @@ function EditorBloque({ bloque, cambiar, onRecortar }) {
                 <Rango label="Escala" value={bloque.ancho} min={10} max={100} unidad="%" onChange={set('ancho')} />
                 {bloque.ancho < 100 && <Segmentos label="Alineación" opciones={[['left', 'Izquierda'], ['center', 'Centro'], ['right', 'Derecha']]} valor={bloque.alineacion} onChange={set('alineacion')} />}
               </>
-            ) : <p className="text-xs text-slate-500">Ocupa todo el ancho del correo, sin margen. Ideal para la cabecera.</p>}
+            ) : <p className="text-xs text-slate-500">Ocupa todo el ancho de la columna blanca, sin espacio a los lados, pero nunca invade los márgenes de color. Ideal para la cabecera.</p>}
           </Seccion>
           <Seccion titulo="Enlace">
             <Texto value={bloque.enlace} onChange={set('enlace')} label="Enlace de la imagen" placeholder="https://example.com" />
@@ -504,7 +504,7 @@ export default function EmailDesigner({ bloques: bloquesIniciales, estilos: esti
                   </>
                 ) : (
                   <div className="space-y-5">
-                    <Campo label="Fondo exterior" hint="El color alrededor del correo.">
+                    <Campo label="Fondo exterior" hint="El color de los márgenes laterales. El correo mide siempre 600 px de ancho: las imágenes se ajustan a ese ancho y nunca invaden los márgenes.">
                       <div className="flex flex-wrap gap-2">
                         {FONDOS.map(([color, nombre]) => (
                           <button type="button" key={color} onClick={() => cambiarEstilos({ fondo: color })} aria-pressed={estilos.fondo === color} title={nombre}
@@ -513,9 +513,6 @@ export default function EmailDesigner({ bloques: bloquesIniciales, estilos: esti
                           </button>
                         ))}
                       </div>
-                    </Campo>
-                    <Campo label="Margen lateral" hint="Espacio entre el borde del correo y el contenido. Las imágenes &quot;borde a borde&quot; no lo usan.">
-                      <Segmentos label="Margen lateral" opciones={MARGENES.map(m => [m, `${m}`])} valor={estilos.margen} onChange={(m) => cambiarEstilos({ margen: m })} />
                     </Campo>
                   </div>
                 )}
@@ -527,8 +524,10 @@ export default function EmailDesigner({ bloques: bloquesIniciales, estilos: esti
         {/* Correo */}
         <main className="order-1 lg:order-2 min-h-0 flex-1 overflow-auto transition-colors" style={{ background: estilos.fondo }}
           onClick={() => setSeleccion(null)}>
-          <div className="px-3 py-6 sm:px-14 sm:py-10">
-            <div className="relative mx-auto bg-white shadow-sm transition-[width] duration-300" style={{ width: ancho, maxWidth: '100%' }}
+          {/* Márgenes de color solo a los lados; arriba y abajo la columna va al ras. Siempre se ven y la columna
+              no se encoge: si la pantalla es angosta, se desplaza */}
+          <div className="flex min-h-full w-max min-w-full flex-col px-4 sm:px-12">
+            <div className="relative mx-auto flex-1 bg-white shadow-sm transition-[width] duration-300" style={{ width: ancho }}
               onDragOver={alArrastrarSobre} onDrop={alSoltar}
               onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDestino(null); }}
               onClickCapture={(e) => { if (e.target.closest('a')) e.preventDefault(); }}>
@@ -544,7 +543,7 @@ export default function EmailDesigner({ bloques: bloquesIniciales, estilos: esti
                       onClick={(e) => { e.stopPropagation(); setSeleccion(b.id); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) setSeleccion(b.id); }}
                       className={`group relative cursor-pointer outline-offset-[-1px] ${activo ? 'outline outline-2 outline-navy-700' : 'hover:outline hover:outline-1 hover:outline-navy-700/50'}`}>
-                      {(activo) && <span className="absolute left-0 -top-5 z-10 rounded-t-md bg-navy-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">{NOMBRE_TIPO[b.tipo]}</span>}
+                      {(activo) && <span className={`absolute left-0 z-10 ${i === 0 ? 'top-0 rounded-br-md' : '-top-5 rounded-t-md'} bg-navy-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white`}>{NOMBRE_TIPO[b.tipo]}</span>}
                       <div dangerouslySetInnerHTML={{ __html: renderBloque(b, estilos) }} />
                       {/* Herramientas al costado, fuera del correo (dentro en celular) */}
                       <div className={`absolute top-0 z-10 flex-col gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 shadow-md right-1 sm:right-auto sm:left-full sm:ml-2 ${activo ? 'flex' : 'hidden group-hover:flex'}`}>
