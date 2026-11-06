@@ -19,17 +19,44 @@ export const enlaceSeguro = (url) => { const u = String(url || '').trim(); retur
 export const imagenSegura = (url) => { const u = String(url || '').trim(); return /^https?:\/\//i.test(u) || /^data:image\/(png|jpe?g|gif|webp)[;,]/i.test(u) ? u : ''; };
 export const esIncrustada = (url) => /^data:image\//i.test(String(url || ''));
 
+// Outlook de escritorio (Windows) arma el correo con el motor de Word: ignora padding, margin, display y
+// border-radius en <a> y <div>, y también max-width. Por eso todo lo que da forma (márgenes, cajas, botones)
+// va en celdas de tabla con atributos (bgcolor, align, width), y el ancho de 600 px se fija con una tabla
+// que solo lee Outlook (comentarios <!--[if mso]>). Es la misma técnica que usan Mailchimp y Brevo
+const mso = (html) => `<!--[if mso]>${html}<![endif]-->`;
+const fuente = (size, alto = 1.6, extra = '') => `font-family:${FONT};font-size:${size}px;line-height:${Math.round(size * alto)}px;${extra}`;
 const tabla = (filas, extra = '') => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;${extra}">${filas}</table>`;
-const fila = (contenido, padding) => tabla(`<tr><td style="padding:${padding}">${contenido}</td></tr>`);
-const vacio = (texto, m) => fila(`<div style="border:2px dashed #cbd5e1;border-radius:6px;padding:36px 12px;text-align:center;font:14px ${FONT};color:#64748b;background:#f8fafc">${esc(texto)}</div>`, `8px ${m}px`);
+const celda = (contenido, padding, align = 'left', extra = '') => `<td align="${align}" style="padding:${padding};text-align:${align};${extra}">${contenido}</td>`;
+const fila = (contenido, padding, align = 'left') => tabla(`<tr>${celda(contenido, padding, align)}</tr>`);
+const vacio = (texto, m) => fila(`<div style="border:2px dashed #cbd5e1;border-radius:6px;padding:36px 12px;text-align:center;${fuente(14, 1.4)}color:#64748b;background:#f8fafc">${esc(texto)}</div>`, `8px ${m}px`);
 const conEnlace = (html, url) => { const href = enlaceSeguro(url); return href ? `<a href="${esc(href)}" target="_blank" style="text-decoration:none">${html}</a>` : html; };
-const boton = (texto, url, color = C.orange, margen = '6px 8px') => `<a href="${esc(enlaceSeguro(url) || '#')}" target="_blank" style="display:inline-block;margin:${margen};background:${color};border-radius:6px;padding:14px 26px;font:bold 15px ${FONT};color:#ffffff;text-decoration:none;text-transform:uppercase">${esc(texto)}</a>`;
+
+// Botón "a prueba de Outlook": el color y el relleno van en la celda (mso-padding-alt es el relleno que lee Outlook)
+// y el enlace también lleva relleno para que en el resto de correos se pueda pulsar todo el botón
+const boton = (texto, url, color = C.orange) => {
+  const href = esc(enlaceSeguro(url) || '#');
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;margin:0 auto"><tr>`
+    + `<td align="center" bgcolor="${color}" style="background:${color};border-radius:6px;mso-padding-alt:14px 26px">`
+    + `<a href="${href}" target="_blank" style="display:inline-block;padding:14px 26px;${fuente(15, 1.2, 'font-weight:bold;')}color:#ffffff;text-decoration:none;text-transform:uppercase;border-radius:6px">${esc(texto)}</a>`
+    + '</td></tr></table>';
+};
+// Varios botones en una fila: en Outlook, una celda por botón con su separación; en el resto, bloques que
+// bajan a otra línea si no caben (celular)
+const grupo = (piezas, align = 'center', separacion = 8, vertical = 6) => {
+  if (!piezas.length) return '';
+  const abre = mso(`<table role="presentation" align="${align}" cellpadding="0" cellspacing="0" border="0"><tr>`);
+  const cuerpo = piezas.map(html => mso(`<td style="padding:${vertical}px ${separacion}px">`)
+    + `<div style="display:inline-block;margin:${vertical}px ${separacion}px;vertical-align:top">${html}</div>`
+    + mso('</td>')).join('');
+  return `<div style="text-align:${align};font-size:0;line-height:0">${abre}${cuerpo}${mso('</tr></table>')}</div>`;
+};
+const botones = (lista, color, align, separacion) => grupo((lista || []).filter(x => x.texto).map(x => boton(x.texto, x.url, color)), align, separacion);
 
 export const REDES = [['facebook', 'Facebook'], ['instagram', 'Instagram'], ['x', 'X'], ['linkedin', 'LinkedIn'], ['web', 'Sitio web']];
-const redesHtml = (redes = {}) => REDES.map(([key, nombre]) => {
+const redesHtml = (redes = {}) => grupo(REDES.map(([key, nombre]) => {
   const href = enlaceSeguro(redes[key]);
-  return href ? `<a href="${esc(href)}" target="_blank" style="display:inline-block;margin:0 5px;text-decoration:none"><img src="${EMAIL_ASSETS.redes[key]}" alt="${nombre}" width="36" height="36" style="display:block;width:36px;height:36px;border:0"></a>` : '';
-}).join('');
+  return href ? `<a href="${esc(href)}" target="_blank" style="text-decoration:none"><img src="${EMAIL_ASSETS.redes[key]}" alt="${nombre}" width="36" height="36" style="display:block;width:36px;height:36px;border:0"></a>` : '';
+}).filter(Boolean), 'center', 5, 0);
 
 // Darse de baja: va siempre en el pie. El worker cambia {{enlace_baja}} por el enlace de cada destinatario
 // (/track/unsubscribe?email=...), que lo saca de los envíos y le pone la etiqueta "Desuscrito" (ver BACKEND.md)
@@ -40,7 +67,7 @@ const bajaHtml = (b) => {
   const texto = String(b.bajaTexto ?? BAJA_BASE.bajaTexto).trim();
   const etiqueta = String(b.bajaBoton || '').trim() || BAJA_BASE.bajaBoton;
   const enlace = `<a href="${ENLACE_BAJA}" target="_blank" style="color:${C.muted};text-decoration:underline">${esc(etiqueta)}</a>`;
-  return `<p style="margin:10px 0 0;font:11px/1.6 ${FONT};color:${C.muted}">${texto ? `${conSaltos(texto)} ` : ''}${enlace}.</p>`;
+  return `${texto ? `${conSaltos(texto)} ` : ''}${enlace}.`;
 };
 
 const RENDER = {
@@ -49,65 +76,71 @@ const RENDER = {
     if (!src) return vacio('Imagen: sube un archivo o pega un enlace', m);
     if (b.modo === 'rellenar') {
       const img = `<img src="${esc(src)}" alt="${esc(b.alt)}" width="${ANCHO_CORREO}" style="display:block;width:100%;max-width:${ANCHO_CORREO}px;height:auto;border:0">`;
-      return tabla(`<tr><td style="padding:0">${conEnlace(img, b.enlace)}</td></tr>`);
+      return fila(conEnlace(img, b.enlace), '0');
     }
     const ancho = Math.round((ANCHO_CORREO - 2 * m) * (Number(b.ancho) || 100) / 100);
+    const align = b.alineacion || 'center';
     const img = `<img src="${esc(src)}" alt="${esc(b.alt)}" width="${ancho}" style="display:inline-block;width:100%;max-width:${ancho}px;height:auto;border:0;vertical-align:top">`;
-    return fila(`<div style="text-align:${b.alineacion || 'center'};line-height:0">${conEnlace(img, b.enlace)}</div>`, `6px ${m}px`);
+    return fila(conEnlace(img, b.enlace), `6px ${m}px`, align);
   },
   encabezado: (b, m) => {
     const size = { grande: 28, mediano: 22, pequeno: 17 }[b.tamano] || 28;
     if (b.estilo === 'franja') {
-      return fila(tabla(`<tr><td style="background:${C.navy};border-radius:6px;padding:13px 16px;text-align:center;font:bold ${Math.min(size, 22)}px/1.3 ${FONT};color:#ffffff">${conSaltos(b.texto)}</td></tr>`), `8px ${m}px`);
+      const t = Math.min(size, 22);
+      return fila(tabla(`<tr><td align="center" bgcolor="${C.navy}" style="background:${C.navy};border-radius:6px;padding:13px 16px;text-align:center;${fuente(t, 1.3, 'font-weight:bold;')}color:#ffffff">${conSaltos(b.texto)}</td></tr>`), `8px ${m}px`);
     }
     const borde = b.estilo === 'barra' ? `border-left:5px solid ${C.orange};padding:4px 0 4px 18px;` : '';
     const alin = b.estilo === 'barra' ? 'left' : (b.alineacion || 'left');
-    return fila(tabla(`<tr><td style="${borde}font:bold ${size}px/1.25 ${FONT};color:${C.navy};text-align:${alin}">${conSaltos(b.texto)}</td></tr>`), `20px ${m}px 12px`);
+    return fila(tabla(`<tr><td align="${alin}" style="${borde}${fuente(size, 1.25, 'font-weight:bold;')}color:${C.navy};text-align:${alin}">${conSaltos(b.texto)}</td></tr>`), `20px ${m}px 12px`);
   },
   parrafo: (b, m) => {
     const caja = b.recuadro ? `border:2px solid ${C.navy};padding:12px 14px;` : '';
-    return fila(tabla(`<tr><td style="${caja}text-align:${b.alineacion || 'left'};font:${Number(b.tamano) || 15}px/1.6 ${FONT};color:${C.text}">${conSaltos(b.texto)}</td></tr>`), `6px ${m}px`);
+    const alin = b.alineacion || 'left';
+    return fila(tabla(`<tr><td align="${alin}" style="${caja}text-align:${alin};${fuente(Number(b.tamano) || 15)}color:${C.text}">${conSaltos(b.texto)}</td></tr>`), `6px ${m}px`);
   },
   boton: (b, m) => {
-    const html = (b.botones || []).filter(x => x.texto).map(x => boton(x.texto, x.url, COLORES_BOTON[b.color])).join('');
-    return html ? fila(`<div style="text-align:${b.alineacion || 'center'}">${html}</div>`, `12px ${Math.max(m - 8, 0)}px`) : vacio('Botón sin texto', m);
+    const html = botones(b.botones, COLORES_BOTON[b.color], b.alineacion || 'center', 8);
+    return html ? fila(html, `6px ${Math.max(m - 8, 0)}px`, b.alineacion || 'center') : vacio('Botón sin texto', m);
   },
-  divisor: (b, m) => fila(`<div style="border-top:${Number(b.grosor) || 1}px solid ${b.color || '#d1d5db'};font-size:1px;line-height:1px">&nbsp;</div>`, `14px ${m}px`),
+  divisor: (b, m) => fila(tabla(`<tr><td style="border-top:${Number(b.grosor) || 1}px solid ${b.color || '#d1d5db'};font-size:1px;line-height:1px;height:1px">&nbsp;</td></tr>`), `14px ${m}px`),
   espaciador: (b) => { const alto = Number(b.alto) || 24; return tabla(`<tr><td style="height:${alto}px;line-height:${alto}px;font-size:1px">&nbsp;</td></tr>`); },
   logotipo: (b, m) => {
     const src = imagenSegura(b.logo);
     if (!src) return vacio('Logotipo: sube una imagen', m);
     const ancho = Number(b.ancho) || 120;
-    return fila(`<div style="text-align:center;line-height:0">${conEnlace(`<img src="${esc(src)}" alt="MHORIZON" width="${ancho}" style="display:inline-block;width:${ancho}px;max-width:100%;height:auto;border:0">`, b.enlace)}</div>`, `12px ${m}px`);
+    return fila(conEnlace(`<img src="${esc(src)}" alt="MHORIZON" width="${ancho}" style="display:inline-block;width:${ancho}px;max-width:100%;height:auto;border:0">`, b.enlace), `12px ${m}px`, 'center');
   },
-  redes: (b, m) => { const html = redesHtml(b.redes); return html ? fila(`<div style="text-align:center">${html}</div>`, `10px ${m}px`) : vacio('Redes sociales: agrega al menos un enlace', m); },
+  redes: (b, m) => { const html = redesHtml(b.redes); return html ? fila(html, `10px ${m}px`, 'center') : vacio('Redes sociales: agrega al menos un enlace', m); },
   pie: (b, m) => {
-    const botones = (b.botones || []).filter(x => x.texto).map(x => boton(x.texto, x.url, C.orange, '6px 14px')).join('');
     const logo = imagenSegura(b.logo);
-    const redes = redesHtml(b.redes);
-    const textos = [
-      b.copyright && `<p style="margin:18px 0 6px;font:italic 12px/1.6 ${FONT};color:${C.text}">${conSaltos(b.copyright)}</p>`,
-      b.mensaje && `<p style="margin:0 0 6px;font:12px/1.6 ${FONT};color:${C.text}">${conSaltos(b.mensaje)}</p>`,
-      b.direccion && `<p style="margin:14px 0 0;font:12px/1.6 ${FONT};color:${C.text}">${conSaltos(b.direccion)}</p>`,
-      bajaHtml(b),
-    ].filter(Boolean).join('');
-    return fila('<div style="text-align:center">'
-      + (botones ? `<div style="padding-bottom:18px">${botones}</div>` : '')
-      + (logo ? `<img src="${esc(logo)}" alt="MHORIZON" width="110" style="display:inline-block;width:110px;height:auto;border:0;margin-bottom:12px">` : '')
-      + (redes ? `<div>${redes}</div>` : '')
-      + (b.botonTexto ? `<div style="padding:18px 0 4px">${boton(b.botonTexto, b.botonUrl, C.orange, '0')}</div>` : '')
-      + textos
-      + '</div>', `20px ${m}px 28px`);
+    const texto = (t, size, padding, extra = '') => celda(t, padding, 'center', `${fuente(size, 1.6, extra)}color:${C.text}`);
+    const partes = [
+      botones(b.botones, C.orange, 'center', 8) && celda(botones(b.botones, C.orange, 'center', 8), '0 0 12px', 'center'),
+      logo && celda(`<img src="${esc(logo)}" alt="MHORIZON" width="110" style="display:inline-block;width:110px;height:auto;border:0">`, '0 0 12px', 'center'),
+      redesHtml(b.redes) && celda(redesHtml(b.redes), '0', 'center'),
+      b.botonTexto && celda(boton(b.botonTexto, b.botonUrl, C.orange), '18px 0 4px', 'center'),
+      b.copyright && texto(conSaltos(b.copyright), 12, '18px 0 6px', 'font-style:italic;'),
+      b.mensaje && texto(conSaltos(b.mensaje), 12, '0 0 6px'),
+      b.direccion && texto(conSaltos(b.direccion), 12, '8px 0 0'),
+      celda(bajaHtml(b), '10px 0 0', 'center', `${fuente(11)}color:${C.muted}`),
+    ].filter(Boolean);
+    return fila(tabla(partes.map(p => `<tr>${p}</tr>`).join('')), `20px ${m}px 28px`, 'center');
   },
 };
 
 export const renderBloque = (bloque, estilos = ESTILOS_BASE) => (RENDER[bloque.tipo] ? RENDER[bloque.tipo](bloque, Number(estilos.margen) || 0) : '');
 
-// Correo completo: fondo exterior y columna blanca de 600 px
+// Correo completo: fondo exterior y columna blanca de 600 px. El fondo va como bgcolor de una tabla
+// (Outlook no pinta el fondo de un <div>) y el ancho se fija para Outlook con una tabla de 600 px
 export function renderCorreo(bloques, { estilos = ESTILOS_BASE } = {}) {
   const fondo = estilos.fondo || ESTILOS_BASE.fondo;
   const cuerpo = bloques.map(b => renderBloque(b, estilos)).join('');
-  return `<div style="margin:0;padding:32px 0;background:${fondo}">${tabla(`<tr><td align="center" style="padding:0 12px"><table role="presentation" width="${ANCHO_CORREO}" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:${ANCHO_CORREO}px;background:#ffffff">${cuerpo ? `<tr><td>${cuerpo}</td></tr>` : ''}</table></td></tr>`)}</div>`;
+  const columna = `<table role="presentation" align="center" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="border-collapse:collapse;width:100%;max-width:${ANCHO_CORREO}px;margin:0 auto;background:#ffffff">${cuerpo ? `<tr><td>${cuerpo}</td></tr>` : ''}</table>`;
+  return tabla(`<tr><td align="center" bgcolor="${fondo}" style="padding:32px 12px;background:${fondo}">`
+    + mso(`<table role="presentation" align="center" width="${ANCHO_CORREO}" cellpadding="0" cellspacing="0" border="0"><tr><td width="${ANCHO_CORREO}">`)
+    + columna
+    + mso('</td></tr></table>')
+    + '</td></tr>', `background:${fondo}`).replace('<table role="presentation" width="100%"', `<table role="presentation" width="100%" bgcolor="${fondo}"`);
 }
 
 // Bloques que se pueden agregar, con sus valores iniciales (mismos nombres que en Mailchimp)
