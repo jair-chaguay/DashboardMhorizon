@@ -19,11 +19,13 @@ import { formatHora } from '../utils/dates';
 import { formatSize } from '../utils/files';
 import EmailDesigner from '../components/EmailDesigner';
 import Select from '../components/Select';
+import TagSelect from '../components/TagSelect';
 import SenderManager from '../components/SenderManager';
 import ReuseCampaignModal from '../components/ReuseCampaignModal';
 import {
   renderCorreo, revisarBloques, textoBloques, bloquesValidos, estilosValidos, correoNuevo, sinImagenesIncrustadas,
 } from '../utils/emailBlocks';
+import { bloquesDesdeHtml } from '../utils/emailParse';
 
 // Fuera del componente: si se recrea en cada render, Quill reinicia la barra y pierde el foco
 const modulosQuill = {
@@ -221,6 +223,12 @@ export default function ManualBroadcast() {
     return selectedTags.some(t => tags.includes(t));
   }), [leads, selectedTags]);
   const maxDestinatarios = publico.length;
+  // Prospectos activos con cada etiqueta, para mostrarlo en el desplegable
+  const conteoEtiquetas = useMemo(() => {
+    const conteo = {};
+    leads.forEach(l => { if (FASES.includes(Number(l.fase))) parseTags(l.etiquetas).forEach(t => { conteo[t] = (conteo[t] || 0) + 1; }); });
+    return conteo;
+  }, [leads]);
   // El mismo nombre que arma el servidor si no se escribe uno
   const nombreAutomatico = useMemo(() => {
     const fases = [...new Set(publico.map(l => Number(l.fase)))].sort((a, b) => a - b);
@@ -278,12 +286,6 @@ export default function ManualBroadcast() {
   }
   const listos = checks.filter(c => c.state === 'ok').length;
 
-  const toggleTag = (tag) => {
-    setSelectedTags(prev =>
-      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
-    );
-  };
-
   const addFiles = (e) => {
     const nuevos = Array.from(e.target.files);
     setArchivos(prev => [...prev, ...nuevos.filter(n => !prev.some(a => a.name === n.name && a.size === n.size))]);
@@ -307,12 +309,19 @@ export default function ManualBroadcast() {
   // Reutilizar una difusión enviada: se copia solo su diseño; asunto, público, nombre y adjuntos empiezan de cero
   const cargarDisenoEnviado = useCallback((nombre, confirmar) => api.get('/campaign/diseno', { params: { nombre } })
     .then(async ({ data }) => {
+      // El correo con diseño trae sus bloques; si se envió antes de que se guardaran, se rearman desde su HTML.
+      // Un cuerpo con tablas siempre es del editor de diseño (el del correo personal no las genera)
+      const guardado = bloquesValidos(data.diseno?.bloques).length > 0 ? data.diseno : null;
+      const conDiseno = data.formato === 'campana' || /<table/i.test(data.cuerpo || '');
+      const diseno = conDiseno ? guardado || bloquesDesdeHtml(data.cuerpo) : null;
+      if (conDiseno && !diseno) throw new Error('No se pudo leer el diseño de esa campaña.');
       if (confirmar && !(await confirmAction(TEXTO_REUSAR))) return;
-      if (data.formato === 'campana') {
-        const lista = bloquesValidos(data.diseno?.bloques).map(b => ({ ...b, id: `${b.id}-${new Date().getTime()}` }));
+      if (diseno) {
+        const lista = bloquesValidos(diseno.bloques).map(b => ({ ...b, id: `${b.id}-${new Date().getTime()}` }));
         setFormato('campana');
         setBloques(lista);
-        setEstilos(estilosValidos(data.diseno?.estilos));
+        setEstilos(estilosValidos(diseno.estilos));
+        setEditorAbierto(true);
       } else {
         setFormato('personal');
         setCuerpo(data.cuerpo || '');
@@ -328,7 +337,7 @@ export default function ManualBroadcast() {
     })
     .catch((error) => {
       setReusarOpen(false);
-      setMessage({ type: 'error', text: error?.response?.data?.message || 'No se pudo cargar el diseño de esa campaña.' });
+      setMessage({ type: 'error', text: error?.response?.data?.message || error?.message || 'No se pudo cargar el diseño de esa campaña.' });
     }), []);
   const reutilizarCampana = async (nombre) => {
     if ((asunto.trim() || !cuerpoVacio) && !(await confirmAction(TEXTO_REUSAR))) return;
@@ -487,21 +496,9 @@ export default function ManualBroadcast() {
         <div className="space-y-5">
           <Step n="1" title="Público objetivo" hint="El correo llega a los prospectos que tengan al menos una de las etiquetas.">
             {availableTags.length > 0 ? (
-              <div>
-                <div className="flex flex-wrap gap-2">
-                  {availableTags.map(tag => {
-                    const activa = selectedTags.includes(tag);
-                    return (
-                      <button type="button" key={tag} onClick={() => toggleTag(tag)} aria-pressed={activa}
-                        className={`cursor-pointer rounded-md border px-2.5 py-1 text-[13px] font-medium transition-colors ${activa
-                          ? 'bg-navy-900 border-navy-900 text-white'
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-                        {tag}
-                      </button>
-                    );
-                  })}
-                </div>
-                {selectedTags.length === 0 && <p className="text-[13px] text-slate-500 mt-3">Elige al menos una etiqueta para poder enviar.</p>}
+              <div className="max-w-md">
+                <TagSelect options={availableTags} value={selectedTags} onChange={setSelectedTags} counts={conteoEtiquetas} label="Etiquetas del público" />
+                {selectedTags.length === 0 && <p className="text-[13px] text-slate-500 mt-2">Elige al menos una etiqueta para poder enviar.</p>}
               </div>
             ) : <p className="text-[13px] text-slate-500">Aún no hay etiquetas. Agrégalas a tus prospectos para poder enviar.</p>}
           </Step>
