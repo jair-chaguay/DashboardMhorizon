@@ -8,7 +8,7 @@ import EmptyState from '../components/EmptyState';
 import Skeleton from '../components/Skeleton';
 import PageHeader from '../components/PageHeader';
 import StatusMessage from '../components/StatusMessage';
-import { selectClass, ui } from '../utils/theme';
+import { ui } from '../utils/theme';
 import { useLeads } from '../hooks/useLeads';
 import { useEmailLogs } from '../hooks/useEmailLogs';
 import { downloadCsv } from '../utils/csv';
@@ -18,6 +18,7 @@ import { parseTags } from '../utils/tags';
 import { estadoLabel, faseLabel, isReplied, statusDot } from '../utils/status';
 import { confirmAction, notifyError, notifySuccess } from '../utils/notify';
 import { DELIVERED_FLAG, deliveryFlag, summarizeDeliverability } from '../utils/deliverability';
+import Select from '../components/Select';
 
 const PAGE_SIZE = 25;
 const FASES = [1, 2, 3, 4, 5];
@@ -379,19 +380,19 @@ export default function Audience() {
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:ml-auto sm:items-center">
             <span className="text-[13px] text-slate-500 hidden sm:inline mr-1">{leadsFiltrados.length} de {leads.length}</span>
-            <select value={filtroEstado} onChange={(e) => resetView(setFiltroEstado)(e.target.value)} className={`${selectClass} w-full sm:w-auto`} aria-label="Filtrar por estado">
-              <option value="Todos">Estado: todos</option>
-              {estados.map(estado => <option key={estado} value={estado}>{estado}</option>)}
-              {followUpCount > 0 && <option value={SEGUIMIENTO}>Para seguimiento</option>}
-              {accionCount > 0 && <option value={ACCION}>Acciones para hoy</option>}
-              {reboteCount > 0 && <option value={REBOTE}>Rebote duro</option>}
-              {bajaCount > 0 && <option value={BAJA}>Desuscritos o spam</option>}
-            </select>
-            <select value={filtroEtiqueta} onChange={(e) => resetView(setFiltroEtiqueta)(e.target.value)} className={`${selectClass} w-full sm:w-auto`} aria-label="Filtrar por etiqueta">
-              <option value="Todas">Etiqueta: todas</option>
-              <option value="SinEtiqueta">Sin etiquetas</option>
-              {etiquetasUnicas.map(tag => <option key={tag} value={tag}>{tag}</option>)}
-            </select>
+            <Select label="Filtrar por estado" align="right" className="w-full sm:w-48" value={filtroEstado} onChange={resetView(setFiltroEstado)} options={[
+              ['Todos', 'Estado: todos'],
+              ...estados.map(estado => [estado, estado]),
+              ...(followUpCount > 0 ? [[SEGUIMIENTO, 'Para seguimiento']] : []),
+              ...(accionCount > 0 ? [[ACCION, 'Acciones para hoy']] : []),
+              ...(reboteCount > 0 ? [[REBOTE, 'Rebote duro']] : []),
+              ...(bajaCount > 0 ? [[BAJA, 'Desuscritos o spam']] : []),
+            ]} />
+            <Select label="Filtrar por etiqueta" align="right" className="w-full sm:w-44" value={filtroEtiqueta} onChange={resetView(setFiltroEtiqueta)} options={[
+              ['Todas', 'Etiqueta: todas'],
+              ['SinEtiqueta', 'Sin etiquetas'],
+              ...etiquetasUnicas.map(tag => [tag, tag]),
+            ]} />
             <button type="button" onClick={exportCsv} disabled={leadsFiltrados.length === 0} title="Descargar la lista filtrada" className={`${ui.btn} col-span-2 sm:col-span-1`}>
               <Download size={15} /> Exportar
             </button>

@@ -16,4 +16,3 @@ export const ui = {
   label: 'text-[13px] font-semibold text-slate-700',
 };
 
-export const selectClass = 'h-10 pl-3 pr-8 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 cursor-pointer';

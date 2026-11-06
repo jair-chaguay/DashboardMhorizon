@@ -1,9 +1,10 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import {
   Send, Users, Paperclip, X, Eye, PencilLine, Trash2, Loader2, Monitor, Smartphone, LayoutTemplate,
-  ChevronDown, BookmarkPlus, CheckCircle2, AlertTriangle, Circle, Clock, Feather, Newspaper,
+  ChevronDown, BookmarkPlus, CheckCircle2, AlertTriangle, Circle, Clock, Feather, Newspaper, History, Settings2,
 } from 'lucide-react';
 import api from '../api/api';
 import PageHeader from '../components/PageHeader';
@@ -17,6 +18,9 @@ import { confirmAction, promptText } from '../utils/notify';
 import { formatHora } from '../utils/dates';
 import { formatSize } from '../utils/files';
 import EmailDesigner from '../components/EmailDesigner';
+import Select from '../components/Select';
+import SenderManager from '../components/SenderManager';
+import ReuseCampaignModal from '../components/ReuseCampaignModal';
 import {
   renderCorreo, revisarBloques, textoBloques, bloquesValidos, estilosValidos, correoNuevo, sinImagenesIncrustadas,
 } from '../utils/emailBlocks';
@@ -80,6 +84,8 @@ function leerBorrador() {
       formato: data.formato === 'campana' ? 'campana' : 'personal',
       bloques: bloquesValidos(data.bloques),
       estilos: estilosValidos(data.estilos),
+      remitenteId: Number.isInteger(data.remitenteId) ? data.remitenteId : null,
+      remitenteNombre: typeof data.remitenteNombre === 'string' ? data.remitenteNombre : '',
     };
   } catch {
     return null;
@@ -106,9 +112,9 @@ function guardarPlantillas(lista) {
 
 const Step = ({ n, title, hint, right, children }) => (
   <section className={`${ui.card} p-5`}>
-    <div className="flex items-start gap-3 mb-4">
+    <div className="flex flex-wrap items-start gap-3 mb-4">
       <span className="h-6 w-6 mt-px shrink-0 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold grid place-items-center">{n}</span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-56">
         <h3 className="text-[15px] font-semibold text-slate-900">{title}</h3>
         {hint && <p className="text-[13px] text-slate-500 mt-0.5">{hint}</p>}
       </div>
@@ -137,6 +143,8 @@ const Selector = ({ opciones, valor, onChange }) => (
 const DISENO_NUEVO = [{ id: 'nuevo', nombre: 'Empezar de cero (solo el pie)', asunto: '', bloques: correoNuevo }];
 const VISTAS = [['editar', PencilLine, 'Editar'], ['previa', Eye, 'Vista previa']];
 const DISPOSITIVOS = [['escritorio', Monitor, 'Escritorio'], ['movil', Smartphone, 'Móvil']];
+
+const TEXTO_REUSAR = { title: '¿Reutilizar este diseño?', text: 'Reemplazará el correo que tienes armado y vaciará el asunto, el público y los adjuntos.', confirmText: 'Sí, reutilizar' };
 
 const CHECK_STYLE = {
   ok: { icon: CheckCircle2, color: 'text-emerald-500' },
@@ -167,6 +175,16 @@ export default function ManualBroadcast() {
   const [guardadoA, setGuardadoA] = useState(null);
   const [plantillas, setPlantillas] = useState(leerPlantillas);
   const [plantillasOpen, setPlantillasOpen] = useState(false);
+  // Remitente: la cuenta desde la que sale y el nombre que ve el destinatario en su bandeja
+  const [remitentes, setRemitentes] = useState(null);
+  const [remitentesFallo, setRemitentesFallo] = useState(false);
+  const [remitenteId, setRemitenteId] = useState(borrador?.remitenteId ?? null);
+  const [remitenteNombre, setRemitenteNombre] = useState(borrador?.remitenteNombre ?? '');
+  const [remitentesOpen, setRemitentesOpen] = useState(false);
+  const [reusarOpen, setReusarOpen] = useState(false);
+  const [reusando, setReusando] = useState(null);
+  const location = useLocation();
+  const navigate = useNavigate();
   const { leads, tags: availableTags } = useLeads();
   const { hourlyActivityData, deliverability } = useDashboardMetrics();
   const primerRender = useRef(true);
@@ -176,12 +194,25 @@ export default function ManualBroadcast() {
     if (primerRender.current) { primerRender.current = false; return; }
     const timer = setTimeout(() => {
       if (asunto === '' && isEmptyBody(cuerpo) && bloques.length === 0) { borrarBorrador(); setGuardadoA(null); return; }
-      const ok = guardarBorrador({ asunto, cuerpo, nombreCampana, etiquetas: selectedTags, formato, bloques, estilos });
+      const ok = guardarBorrador({ asunto, cuerpo, nombreCampana, etiquetas: selectedTags, formato, bloques, estilos, remitenteId, remitenteNombre });
       setBorradorFallo(!ok);
       if (ok) setGuardadoA(new Date());
     }, 600);
     return () => clearTimeout(timer);
-  }, [asunto, cuerpo, nombreCampana, selectedTags, formato, bloques, estilos]);
+  }, [asunto, cuerpo, nombreCampana, selectedTags, formato, bloques, estilos, remitenteId, remitenteNombre]);
+
+  // Si el servidor aún no tiene remitentes (sin desplegar), se envía con la cuenta principal como siempre
+  const cargarRemitentes = useCallback((elegir) => api.get('/remitentes')
+    .then(({ data }) => {
+      setRemitentes(Array.isArray(data) ? data : []);
+      setRemitentesFallo(false);
+      if (elegir) setRemitenteId(elegir);
+    })
+    .catch(() => { setRemitentes([]); setRemitentesFallo(true); }), []);
+  useEffect(() => { cargarRemitentes(); }, [cargarRemitentes]);
+  // El elegido, o el principal si el guardado en el borrador ya no existe
+  const remitente = remitentes?.find(r => r.id === remitenteId) || remitentes?.find(r => r.predeterminado) || remitentes?.[0] || null;
+  const nombreVisible = remitenteNombre.trim() || remitente?.nombre || 'MHORIZON';
 
   // Público: los prospectos activos que tengan al menos una de las etiquetas
   const publico = useMemo(() => leads.filter(l => {
@@ -226,6 +257,7 @@ export default function ManualBroadcast() {
     { state: asunto.trim() ? 'ok' : 'pending', text: asunto.trim() ? 'Asunto escrito' : 'Falta el asunto' },
     { state: cuerpoVacio ? 'pending' : 'ok', text: cuerpoVacio ? 'Falta el mensaje' : 'Mensaje escrito' },
     { state: selectedTags.length === 0 ? 'pending' : maxDestinatarios > 0 ? 'ok' : 'warn', text: selectedTags.length === 0 ? 'Falta elegir etiquetas' : maxDestinatarios > 0 ? `Público elegido: hasta ${maxDestinatarios}` : 'Ningún prospecto con esas etiquetas' },
+    ...(remitente ? [{ state: 'ok', text: `Sale como "${nombreVisible}"` }] : []),
     { state: enlaces > 0 ? 'ok' : 'warn', text: enlaces > 0 ? `${enlaces} ${enlaces === 1 ? 'enlace' : 'enlaces'} para medir clics` : 'Sin enlaces: no se podrán medir clics' },
     { state: asunto.length <= ASUNTO_IDEAL ? 'ok' : 'warn', text: asunto.length <= ASUNTO_IDEAL ? 'Asunto de buen largo' : `Asunto largo (${asunto.length} caracteres)` },
     { state: pesoKb <= PESO_MAX_KB ? 'ok' : 'warn', text: pesoKb <= PESO_MAX_KB ? 'Peso del correo adecuado' : `Pesa ${pesoKb} KB: Gmail recorta lo que pasa de 102 KB` },
@@ -267,9 +299,51 @@ export default function ManualBroadcast() {
     setSelectedTags([]);
     setBloques([]);
     setEstilos(estilosValidos());
+    setRemitenteNombre('');
     setRestaurado(false);
     setGuardadoA(null);
   };
+
+  // Reutilizar una difusión enviada: se copia solo su diseño; asunto, público, nombre y adjuntos empiezan de cero
+  const cargarDisenoEnviado = useCallback((nombre, confirmar) => api.get('/campaign/diseno', { params: { nombre } })
+    .then(async ({ data }) => {
+      if (confirmar && !(await confirmAction(TEXTO_REUSAR))) return;
+      if (data.formato === 'campana') {
+        const lista = bloquesValidos(data.diseno?.bloques).map(b => ({ ...b, id: `${b.id}-${new Date().getTime()}` }));
+        setFormato('campana');
+        setBloques(lista);
+        setEstilos(estilosValidos(data.diseno?.estilos));
+      } else {
+        setFormato('personal');
+        setCuerpo(data.cuerpo || '');
+      }
+      setAsunto('');
+      setNombreCampana('');
+      setSelectedTags([]);
+      setArchivos([]);
+      setRestaurado(false);
+      setVista('editar');
+      setReusarOpen(false);
+      setMessage({ type: 'success', text: `Diseño de "${nombre}" listo. Escribe el asunto y elige el público y el remitente.` });
+    })
+    .catch((error) => {
+      setReusarOpen(false);
+      setMessage({ type: 'error', text: error?.response?.data?.message || 'No se pudo cargar el diseño de esa campaña.' });
+    }), []);
+  const reutilizarCampana = async (nombre) => {
+    if ((asunto.trim() || !cuerpoVacio) && !(await confirmAction(TEXTO_REUSAR))) return;
+    setReusando(nombre);
+    await cargarDisenoEnviado(nombre, false);
+    setReusando(null);
+  };
+
+  // Desde el reporte de una campaña ("Reutilizar diseño") se llega con su nombre
+  const pedidoReusar = location.state?.reutilizar;
+  useEffect(() => {
+    if (!pedidoReusar) return;
+    navigate(location.pathname, { replace: true, state: null });
+    cargarDisenoEnviado(pedidoReusar, hayBorrador);
+  }, [pedidoReusar, hayBorrador, cargarDisenoEnviado, navigate, location.pathname]);
 
   // Una plantilla de campaña trae bloques (los diseños base los crean con ids nuevos); la personal, el HTML del editor
   const aplicarPlantilla = async (plantilla) => {
@@ -345,6 +419,10 @@ export default function ManualBroadcast() {
     formData.append('asunto', asunto);
     formData.append('cuerpo', htmlCorreo);
     formData.append('formato', formato);
+    // Los bloques del editor quedan guardados para poder reutilizar el diseño después
+    if (esCampana) formData.append('diseno', JSON.stringify({ bloques, estilos }));
+    if (remitente) formData.append('remitente_id', remitente.id);
+    if (remitenteNombre.trim()) formData.append('remitente_nombre', remitenteNombre.trim());
     formData.append('etiqueta', selectedTags.join(','));
     // Si queda vacío, el servidor arma "Campaña Etiquetas ... Fase ..."
     if (nombreCampana.trim()) formData.append('nombre_provisional', nombreCampana.trim());
@@ -388,6 +466,8 @@ export default function ManualBroadcast() {
   };
   const guardarDiseno = useCallback((nuevosBloques, nuevosEstilos) => { setBloques(nuevosBloques); setEstilos(nuevosEstilos); }, []);
   const cerrarEditor = useCallback(() => setEditorAbierto(false), []);
+  const cerrarRemitentes = useCallback(() => setRemitentesOpen(false), []);
+  const cerrarReusar = useCallback(() => setReusarOpen(false), []);
   const asuntoLargo = asunto.length > ASUNTO_IDEAL;
 
   return (
@@ -426,9 +506,42 @@ export default function ManualBroadcast() {
             ) : <p className="text-[13px] text-slate-500">Aún no hay etiquetas. Agrégalas a tus prospectos para poder enviar.</p>}
           </Step>
 
-          <Step n="2" title="Mensaje" hint={esCampana ? 'Arma el correo con imágenes, textos y botones. El pie de página ya viene listo.' : 'Puedes pegar imágenes directamente en el editor.'}
+          <Step n="2" title="Remitente" hint="Quién aparece como remitente en la bandeja de entrada de tus prospectos."
+            right={!remitentesFallo && (
+              <button type="button" onClick={() => setRemitentesOpen(true)} disabled={remitentes === null}
+                className="h-8 px-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 text-[13px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer">
+                <Settings2 size={14} /> Administrar
+              </button>
+            )}>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="remitente-nombre" className={`${ui.label} block mb-2`}>Nombre que verán</label>
+                <input id="remitente-nombre" type="text" maxLength={120} value={remitenteNombre} onChange={(e) => setRemitenteNombre(e.target.value)}
+                  className={`${ui.input} w-full`} placeholder={remitente?.nombre || 'Ej. Ana de MHORIZON'} />
+                <p className="text-xs text-slate-500 mt-1.5">{remitenteNombre.trim() ? 'Tus prospectos verán este nombre en lugar del correo.' : `Si lo dejas vacío se verá "${nombreVisible}".`}</p>
+              </div>
+              <div>
+                <span className={`${ui.label} block mb-2`}>Correo de envío</span>
+                {remitentes === null && <div className={`${ui.input} w-full flex items-center gap-2 text-slate-400`}><Loader2 size={14} className="animate-spin" /> Cargando...</div>}
+                {remitentes !== null && remitentes.length > 0 && (
+                  <Select label="Correo de envío" value={remitente?.id} onChange={setRemitenteId}
+                    options={remitentes.map(r => [r.id, r.predeterminado ? `${r.email} (principal)` : r.email])} />
+                )}
+                {remitentes !== null && remitentes.length === 0 && (
+                  <div className={`${ui.input} w-full flex items-center text-slate-500`}>Cuenta principal de MHORIZON</div>
+                )}
+                <p className="text-xs text-slate-500 mt-1.5">{remitentesFallo ? 'No se pudo cargar la lista de correos: se enviará desde la cuenta principal.' : 'Las respuestas llegan a este correo.'}</p>
+              </div>
+            </div>
+          </Step>
+
+          <Step n="3" title="Mensaje" hint={esCampana ? 'Arma el correo con imágenes, textos y botones. El pie de página ya viene listo.' : 'Puedes pegar imágenes directamente en el editor.'}
             right={(
-              <div className="relative">
+              <div className="relative flex items-center gap-2">
+                <button type="button" onClick={() => setReusarOpen(true)}
+                  className="h-8 px-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 text-[13px] font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
+                  <History size={14} /> Reutilizar campaña
+                </button>
                 <button type="button" onClick={() => setPlantillasOpen(o => !o)} aria-expanded={plantillasOpen}
                   className="h-8 px-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 text-[13px] font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
                   <LayoutTemplate size={14} /> {esCampana ? 'Diseños' : 'Plantillas'} <ChevronDown size={13} className={`transition-transform ${plantillasOpen ? 'rotate-180' : ''}`} />
@@ -539,9 +652,9 @@ export default function ManualBroadcast() {
                 <p className="text-xs text-slate-500">Así se vería en la bandeja de entrada y al abrirlo.</p>
 
                 <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
-                  <span className="h-9 w-9 shrink-0 rounded-full bg-navy-900 text-white grid place-items-center text-xs font-bold">M</span>
+                  <span className="h-9 w-9 shrink-0 rounded-full bg-navy-900 text-white grid place-items-center text-xs font-bold">{nombreVisible.charAt(0).toUpperCase()}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-baseline justify-between gap-2"><span className="text-sm font-semibold text-slate-900">MHORIZON</span><span className="text-xs text-slate-500">ahora</span></p>
+                    <p className="flex items-baseline justify-between gap-2"><span className="truncate text-sm font-semibold text-slate-900">{nombreVisible}</span><span className="text-xs text-slate-500">ahora</span></p>
                     <p className="truncate text-sm"><span className="font-semibold text-slate-800">{asunto || '(sin asunto)'}</span><span className="text-slate-400">{snippet ? ` - ${snippet}` : ''}</span></p>
                   </div>
                 </div>
@@ -558,7 +671,7 @@ export default function ManualBroadcast() {
             )}
           </Step>
 
-          <Step n="3" title="Adjuntos" hint="Opcional. PDF, Excel, imágenes, etc.">
+          <Step n="4" title="Adjuntos" hint="Opcional. PDF, Excel, imágenes, etc.">
             <input id="adjuntos" type="file" multiple onChange={addFiles} className="sr-only" />
             <label htmlFor="adjuntos"
               className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-4 text-sm font-medium text-slate-600 hover:border-slate-400 hover:bg-slate-50 transition-colors cursor-pointer">
@@ -586,6 +699,13 @@ export default function ManualBroadcast() {
               <div className="flex items-start justify-between gap-4">
                 <dt className="text-slate-500">Campaña</dt>
                 <dd className="font-medium text-slate-900 text-right">{nombreCampana.trim() || nombreAutomatico || '—'}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-slate-500">Remitente</dt>
+                <dd className="min-w-0 text-right">
+                  <span className="block truncate font-medium text-slate-900">{nombreVisible}</span>
+                  {remitente && <span className="block truncate text-xs text-slate-500">{remitente.email}</span>}
+                </dd>
               </div>
               <div className="flex items-start justify-between gap-4">
                 <dt className="text-slate-500">Etiquetas</dt>
@@ -653,6 +773,8 @@ export default function ManualBroadcast() {
       {editorAbierto && esCampana && (
         <EmailDesigner bloques={bloques} estilos={estilos} onChange={guardarDiseno} onClose={cerrarEditor} />
       )}
+      <SenderManager isOpen={remitentesOpen} onClose={cerrarRemitentes} remitentes={remitentes || []} onCambio={cargarRemitentes} />
+      <ReuseCampaignModal isOpen={reusarOpen} onClose={cerrarReusar} cargando={reusando} onElegir={(c) => reutilizarCampana(c.nombre)} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Search, ArrowUpDown, RefreshCw, GitCompare, X, Download, ChevronRight, Pencil } from 'lucide-react';
 import Modal from '../components/Modal';
+import Select from '../components/Select';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import Skeleton from '../components/Skeleton';
@@ -10,23 +11,12 @@ import Tip from '../components/Tip';
 import { LegendDot, Panel, RateBar, Stat, StatGrid } from '../components/analytics';
 import { downloadCsv } from '../utils/csv';
 import { toDayKey } from '../utils/dates';
-import { COLORS, axisTick, selectClass, tooltipStyle, ui } from '../utils/theme';
+import { COLORS, axisTick, tooltipStyle, ui } from '../utils/theme';
 import { notifyError, promptText } from '../utils/notify';
 import { useDashboardMetrics } from '../hooks/useDashboardMetrics';
 
 const ITEMS_PER_PAGE = 20;
 const MAX_COMPARE = 4;
-const NAME_MODE_KEY = 'campanas_modo_nombre';
-
-const NAME_MODES = [
-  ['alias', 'Provisional'],
-  ['original', 'Original'],
-];
-
-function loadNameMode() {
-  try { return window.localStorage.getItem(NAME_MODE_KEY) === 'original' ? 'original' : 'alias'; } catch { return 'alias'; }
-}
-
 // Origen de la campaña: la secuencia por fases de la IA o un envío de Difusión manual
 const TIPOS = [
   ['todas', 'Todas'],
@@ -34,7 +24,15 @@ const TIPOS = [
   ['manual', 'Difusiones'],
 ];
 const TIPO_LABEL = { ia: 'Secuencia IA', manual: 'Difusión' };
-const FORMATO_LABEL = { personal: 'correo personal', campana: 'con diseño' };
+
+const ORDENES = [
+  ['lastDate:desc', 'Más recientes primero'],
+  ['lastDate:asc', 'Más antiguas primero'],
+  ['openRate:desc', 'Mayor apertura'],
+  ['clickRate:desc', 'Mayores clics'],
+  ['sent:desc', 'Más destinatarios'],
+  ['name:asc', 'Nombre (A-Z)'],
+];
 
 const COMPARE_ROWS = [
   ['sent', 'Destinatarios', (v) => v],
@@ -68,27 +66,21 @@ export default function Campaigns() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selected, setSelected] = useState([]);
   const [compareOpen, setCompareOpen] = useState(false);
-  const [nameMode, setNameMode] = useState(loadNameMode);
   const [tipo, setTipo] = useState('todas');
 
-  const changeNameMode = (mode) => {
-    setNameMode(mode);
-    try { window.localStorage.setItem(NAME_MODE_KEY, mode); } catch { /* sin almacenamiento */ }
-  };
-
-  // El nombre provisional solo cambia lo que se ve; camp.name sigue identificando la campaña
+  // Se muestra el nombre provisional si tiene uno; camp.name (el asunto) sigue identificando la campaña
   // El filtro por origen aplica a toda la página: indicadores, tendencia y tabla
   const hasTipos = rawSummary.some(c => c.tipo);
   const campaignsSummary = useMemo(() => rawSummary
     .filter(c => tipo === 'todas' || c.tipo === tipo)
-    .map(c => ({ ...c, displayName: nameMode === 'alias' && c.alias ? c.alias : c.name })), [rawSummary, nameMode, tipo]);
+    .map(c => ({ ...c, displayName: c.alias || c.name, asunto: c.subject || c.name })), [rawSummary, tipo]);
   const countByTipo = useMemo(() => ({
     todas: rawSummary.length, ia: rawSummary.filter(c => c.tipo === 'ia').length, manual: rawSummary.filter(c => c.tipo === 'manual').length,
   }), [rawSummary]);
 
   const editAlias = async (camp) => {
     const alias = await promptText({
-      title: 'Nombre provisional', text: `Original: ${camp.name}. Déjalo vacío para quitarlo.`,
+      title: 'Nombre provisional', text: `Asunto: ${camp.name}. Déjalo vacío para quitarlo.`,
       placeholder: 'Ej. Promo noviembre', initialValue: camp.alias, allowEmpty: true,
     });
     if (alias === null || alias === camp.alias) return;
@@ -214,27 +206,8 @@ export default function Campaigns() {
               ))}
             </div>
           )}
-          <select className={selectClass} value={`${sort.key}:${sort.dir}`} aria-label="Ordenar"
-            onChange={(e) => { const [key, dir] = e.target.value.split(':'); setSort({ key, dir }); }}>
-            <option value="lastDate:desc">Más recientes primero</option>
-            <option value="lastDate:asc">Más antiguas primero</option>
-            <option value="openRate:desc">Mayor apertura</option>
-            <option value="clickRate:desc">Mayores clics</option>
-            <option value="sent:desc">Más destinatarios</option>
-            <option value="name:asc">Nombre (A-Z)</option>
-          </select>
-          <div className="inline-flex items-center gap-2 text-[13px] text-slate-500">
-            Ver nombre
-            <div role="group" aria-label="Qué nombre mostrar" className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
-              {NAME_MODES.map(([mode, label]) => (
-                <button key={mode} onClick={() => changeNameMode(mode)} aria-pressed={nameMode === mode}
-                  title={mode === 'alias' ? 'Muestra el nombre provisional cuando la campaña tenga uno' : 'Muestra el nombre con el que llegó la campaña'}
-                  className={`px-3 h-8 rounded-md text-sm font-semibold cursor-pointer transition-colors ${nameMode === mode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <Select label="Ordenar" align="right" className="w-56" value={`${sort.key}:${sort.dir}`} options={ORDENES}
+            onChange={(v) => { const [key, dir] = v.split(':'); setSort({ key, dir }); }} />
         </div>
 
         <div className="overflow-x-auto">
@@ -266,17 +239,7 @@ export default function Campaigns() {
                         title={camp.alias ? 'Cambiar nombre provisional' : 'Poner nombre provisional'}
                         className="h-6 w-6 inline-grid place-items-center rounded text-slate-400 hover:text-brand-700 hover:bg-slate-100 cursor-pointer"><Pencil size={14} /></button>
                     </span>
-                    {camp.alias && (
-                      <span className="block max-w-64 truncate text-xs text-slate-400" title={nameMode === 'alias' ? camp.name : camp.alias}>
-                        {nameMode === 'alias' ? `Original: ${camp.name}` : `Provisional: ${camp.alias}`}
-                      </span>
-                    )}
-                    {camp.tipo && (
-                      <span className={`mt-0.5 inline-block rounded px-1.5 py-px text-[11px] font-semibold ${camp.tipo === 'ia' ? 'bg-navy-50 text-navy-700' : 'bg-brand-50 text-brand-700'}`}>
-                        {TIPO_LABEL[camp.tipo]}{camp.formato ? ` · ${FORMATO_LABEL[camp.formato]}` : ''}
-                      </span>
-                    )}
-                    {camp.subject && camp.subject !== camp.displayName && <span className="block max-w-64 truncate text-xs text-slate-500" title={camp.subject}>{camp.subject}</span>}
+                    <span className="block max-w-72 truncate text-xs text-slate-500" title={camp.asunto}>Asunto: {camp.asunto}</span>
                   </td>
                   <td className="py-3 px-5 whitespace-nowrap">
                     <span className="text-slate-700">{camp.dateStr}</span>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Download, History, RefreshCw } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import Skeleton from '../components/Skeleton';
@@ -179,6 +179,11 @@ function Report({ nombre }) {
           <button onClick={() => exportRows(recipients, 'destinatarios')} disabled={recipients.length === 0} className={ui.btn}>
             <Download size={16} /> Exportar
           </button>
+          {campaign?.tipo === 'manual' && (
+            <button onClick={() => navigate('/difusion-manual', { state: { reutilizar: nombre } })} title="Crear una difusión nueva con este mismo diseño" className={ui.btnPrimary}>
+              <History size={16} /> Reutilizar diseño
+            </button>
+          )}
         </>}>
         {nombre}
       </PageHeader>
