@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UploadCloud, Search, Tag, X, Trash2, ArrowUpDown, Download, LogIn, LogOut } from 'lucide-react';
+import { UploadCloud, Search, Tag, X, Trash2, ArrowUpDown, Download, LogIn, LogOut, PencilLine } from 'lucide-react';
 import api from '../api/api';
 import Modal from '../components/Modal';
 import ContactDrawer from '../components/ContactDrawer';
@@ -30,6 +30,19 @@ const OPCIONES_CARGA = [
   [true, 'Pasar a fases', 'Entran en la Fase 1 y reciben los correos automáticos de la IA.'],
   [false, 'No pasar a fases', 'Solo reciben los correos que envíes por difusión manual.'],
 ];
+const MODOS_CARGA = [['archivo', UploadCloud, 'Archivo CSV'], ['texto', PencilLine, 'Escribir correos']];
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// Correos escritos a mano: uno por línea o separados por comas, espacios o punto y coma.
+// Se quitan los signos de "Nombre <correo>" y los repetidos; lo que no parece correo se devuelve aparte
+function leerCorreos(texto) {
+  const validos = new Map(), invalidos = [];
+  texto.split(/[\s,;]+/).map(t => t.replace(/^[<("']+|[>)"'.]+$/g, '')).filter(Boolean).forEach(t => {
+    if (EMAIL_VALIDO.test(t)) { if (!validos.has(t.toLowerCase())) validos.set(t.toLowerCase(), t); }
+    else invalidos.push(t);
+  });
+  return { validos: [...validos.values()], invalidos };
+}
 // Para seguimiento: hizo clic en algún correo y todavía no ha respondido
 const SEGUIMIENTO = '__seguimiento';
 const needsFollowUp = (lead) => (lead.clicks || 0) > 0 && !isReplied(estadoOf(lead));
@@ -45,6 +58,8 @@ export default function Audience() {
   const [dragging, setDragging] = useState(false);
   const [etiquetasUpload, setEtiquetasUpload] = useState('');
   const [pasarAFases, setPasarAFases] = useState(true);
+  const [modoCarga, setModoCarga] = useState('archivo');
+  const [textoCorreos, setTextoCorreos] = useState('');
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -208,28 +223,39 @@ export default function Audience() {
     }
   };
 
+  const correosEscritos = useMemo(() => leerCorreos(textoCorreos), [textoCorreos]);
+  const porTexto = modoCarga === 'texto';
+  const puedeSubir = porTexto ? correosEscritos.validos.length > 0 : !!file;
+
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file) return;
+    if (!puedeSubir) return;
 
     setUploading(true);
     setMessage(null);
     const formData = new FormData();
-    formData.append('csv_file', file);
+    // Los correos escritos viajan como un CSV de una columna: el servidor los trata igual que un archivo
+    const csv = porTexto
+      ? new File([['email', ...correosEscritos.validos].join('\n')], 'correos-escritos.csv', { type: 'text/csv' })
+      : file;
+    formData.append('csv_file', csv);
     if (etiquetasUpload.trim() !== '') formData.append('etiquetas', etiquetasUpload);
     formData.append('pasar_a_fases', pasarAFases ? '1' : '0');
 
     try {
       const { data } = await api.post('/leads/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       const yaEnFases = data?.ya_en_fases || 0;
-      setMessage({ type: 'success', text: `Base de datos cargada y etiquetas asignadas correctamente.${yaEnFases > 0 ? ` ${yaEnFases} ya estaban en fases y siguen ahí; puedes sacarlos marcándolos en la tabla.` : ''}` });
+      const cargados = porTexto ? `Se agregaron o actualizaron ${correosEscritos.validos.length} ${correosEscritos.validos.length === 1 ? 'correo' : 'correos'}.` : 'Base de datos cargada y etiquetas asignadas correctamente.';
+      setMessage({ type: 'success', text: `${cargados}${yaEnFases > 0 ? ` ${yaEnFases} ya estaban en fases y siguen ahí; puedes sacarlos marcándolos en la tabla.` : ''}` });
       setFile(null);
+      setTextoCorreos('');
       setEtiquetasUpload('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       fetchLeads();
     } catch (error) {
       const detail = error?.response?.data?.message;
-      setMessage({ type: 'error', text: detail ? `Hubo un error al subir el archivo CSV: ${detail}` : 'Hubo un error al subir el archivo CSV.' });
+      const queFallo = porTexto ? 'agregar los correos' : 'subir el archivo CSV';
+      setMessage({ type: 'error', text: detail ? `Hubo un error al ${queFallo}: ${detail}` : `Hubo un error al ${queFallo}.` });
       console.error(error);
     } finally {
       setUploading(false);
@@ -289,22 +315,43 @@ export default function Audience() {
     <div className="space-y-5">
       <PageHeader description="Tus prospectos con su fase, estado, actividad y etiquetas."
         actions={<button type="button" onClick={() => setShowUpload(v => !v)} aria-expanded={showUpload || leads.length === 0} className={ui.btn}>
-          <UploadCloud size={16} /> Cargar CSV
+          <UploadCloud size={16} /> Agregar prospectos
         </button>}>
         Base de datos
       </PageHeader>
 
-      {/* Carga masiva: se muestra al pulsar "Cargar CSV" o si la base está vacía */}
+      {/* Carga masiva: se muestra al pulsar "Agregar prospectos" o si la base está vacía */}
       {(showUpload || (!loading && leads.length === 0)) && (
       <section className={`${ui.card} p-5 animate-slide-down`}>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-[15px] font-semibold text-slate-900">Cargar prospectos desde CSV</h3>
-            <p className="text-[13px] text-slate-500 mt-0.5">Las etiquetas que escribas se asignan a todos los prospectos del archivo.</p>
+            <h3 className="text-[15px] font-semibold text-slate-900">Agregar prospectos</h3>
+            <p className="text-[13px] text-slate-500 mt-0.5">Desde un archivo CSV o escribiendo los correos. Las etiquetas que pongas se asignan a todos.</p>
           </div>
-          {leads.length > 0 && <button type="button" onClick={() => setShowUpload(false)} aria-label="Cerrar carga de CSV" className="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"><X size={16} /></button>}
+          {leads.length > 0 && <button type="button" onClick={() => setShowUpload(false)} aria-label="Cerrar carga de prospectos" className="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"><X size={16} /></button>}
+        </div>
+        <div role="group" aria-label="Cómo agregar prospectos" className="mb-4 inline-flex rounded-lg bg-slate-100 p-0.5 text-[13px] font-medium">
+          {MODOS_CARGA.map(([key, Icon, label]) => (
+            <button type="button" key={key} onClick={() => { setModoCarga(key); setMessage(null); }} aria-pressed={modoCarga === key}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 cursor-pointer transition-colors ${modoCarga === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+              <Icon size={14} />{label}
+            </button>
+          ))}
         </div>
         <form onSubmit={handleUpload} className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center gap-3">
+          {porTexto ? (
+            <div className="md:basis-full">
+              <textarea value={textoCorreos} onChange={(e) => setTextoCorreos(e.target.value)} rows={5} aria-label="Correos a agregar"
+                placeholder={'Un correo por línea, o separados por comas:\nana@empresa.com\nluis@empresa.com, sofia@empresa.com'}
+                className={`${ui.input} w-full h-auto py-2.5 resize-y leading-relaxed`} />
+              <p className="mt-1.5 text-xs text-slate-500">
+                {correosEscritos.validos.length} {correosEscritos.validos.length === 1 ? 'correo válido' : 'correos válidos'}
+                {correosEscritos.invalidos.length > 0 && (
+                  <span className="font-medium text-amber-600"> · No se agregarán ({correosEscritos.invalidos.length}): {correosEscritos.invalidos.slice(0, 3).join(', ')}{correosEscritos.invalidos.length > 3 ? '…' : ''}</span>
+                )}
+              </p>
+            </div>
+          ) : (
           <div onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop}
             className={`relative w-full md:flex-1 min-w-0 h-10 shrink-0 flex items-center gap-3 px-3 rounded-lg border border-dashed transition-colors ${dragging ? 'border-brand-600 bg-brand-50' : file ? 'border-slate-300 bg-slate-50' : 'border-slate-300 hover:border-slate-400'}`}>
             <input ref={fileInputRef} id="csv-file" type="file" accept=".csv,text/csv" onChange={(e) => pickFile(e.target.files[0])} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="Elegir archivo CSV" />
@@ -318,10 +365,12 @@ export default function Audience() {
               <button type="button" onClick={clearFile} aria-label="Quitar archivo" className="relative z-10 shrink-0 h-6 w-6 grid place-items-center rounded-md text-slate-400 hover:bg-slate-200 hover:text-slate-700 cursor-pointer"><X size={14} /></button>
             )}
           </div>
-          <input type="text" placeholder="Etiquetas (ej. VIP, Evento)" value={etiquetasUpload} onChange={(e) => setEtiquetasUpload(e.target.value)} aria-label="Etiquetas para el archivo"
-            className={`${ui.input} w-full md:w-64`} />
-          <button type="submit" disabled={!file || uploading} className={`${ui.btnPrimary} px-5 whitespace-nowrap`}>
-            {uploading ? 'Subiendo...' : 'Subir archivo'}
+          )}
+          <input type="text" placeholder="Etiquetas (ej. VIP, Evento)" value={etiquetasUpload} onChange={(e) => setEtiquetasUpload(e.target.value)} aria-label="Etiquetas para los prospectos"
+            className={`${ui.input} w-full ${porTexto ? 'md:flex-1' : 'md:w-64'}`} />
+          <button type="submit" disabled={!puedeSubir || uploading} className={`${ui.btnPrimary} px-5 whitespace-nowrap`}>
+            {uploading ? 'Subiendo...' : !porTexto ? 'Subir archivo' : correosEscritos.validos.length === 0 ? 'Agregar correos'
+              : `Agregar ${correosEscritos.validos.length} ${correosEscritos.validos.length === 1 ? 'correo' : 'correos'}`}
           </button>
           <fieldset className="md:basis-full">
             <legend className={`${ui.label} mb-2`}>¿Pasan al flujo de fases?</legend>

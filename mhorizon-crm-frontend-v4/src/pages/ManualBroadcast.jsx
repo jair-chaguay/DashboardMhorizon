@@ -4,7 +4,7 @@ import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import {
   Send, Users, Paperclip, X, Eye, PencilLine, Trash2, Loader2, Monitor, Smartphone, LayoutTemplate,
-  ChevronDown, BookmarkPlus, CheckCircle2, AlertTriangle, Circle, Clock, Feather, Newspaper, History, Settings2,
+  ChevronDown, BookmarkPlus, CheckCircle2, AlertTriangle, Circle, Clock, Feather, Newspaper, History, Settings2, FlaskConical,
 } from 'lucide-react';
 import api from '../api/api';
 import PageHeader from '../components/PageHeader';
@@ -22,6 +22,7 @@ import Select from '../components/Select';
 import TagSelect from '../components/TagSelect';
 import SenderManager from '../components/SenderManager';
 import ReuseCampaignModal from '../components/ReuseCampaignModal';
+import TestEmailModal from '../components/TestEmailModal';
 import {
   renderCorreo, revisarBloques, textoBloques, bloquesValidos, estilosValidos, correoNuevo, sinImagenesIncrustadas,
 } from '../utils/emailBlocks';
@@ -170,6 +171,7 @@ export default function ManualBroadcast() {
   const [borradorFallo, setBorradorFallo] = useState(false);
   const [archivos, setArchivos] = useState([]);
   const [isSending, setIsSending] = useState(false);
+  const [pruebaOpen, setPruebaOpen] = useState(false);
   const [message, setMessage] = useState(null);
   const [vista, setVista] = useState('editar');
   const [dispositivo, setDispositivo] = useState('escritorio');
@@ -401,6 +403,35 @@ export default function ManualBroadcast() {
     guardarPlantillas(lista);
   };
 
+  // Lo que viaja igual en la campaña y en el correo de prueba: asunto, cuerpo, formato, remitente y adjuntos
+  const datosDelCorreo = () => {
+    const formData = new FormData();
+    formData.append('asunto', asunto);
+    formData.append('cuerpo', htmlCorreo);
+    formData.append('formato', formato);
+    if (remitente) formData.append('remitente_id', remitente.id);
+    if (remitenteNombre.trim()) formData.append('remitente_nombre', remitenteNombre.trim());
+    archivos.forEach(archivo => formData.append('adjuntos[]', archivo));
+    return formData;
+  };
+
+  const abrirPrueba = () => {
+    if (!asunto.trim() || cuerpoVacio) {
+      setMessage({ type: 'error', text: 'Escribe el asunto y el mensaje antes de enviar una prueba.' });
+      return;
+    }
+    setMessage(null);
+    setPruebaOpen(true);
+  };
+  const cerrarPrueba = useCallback(() => setPruebaOpen(false), []);
+
+  // Los errores los muestra la ventana de prueba
+  const enviarPrueba = async (correos) => {
+    const formData = datosDelCorreo();
+    formData.append('destinatarios', correos.join(','));
+    await api.post('/campaign/prueba', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  };
+
   const handleDespachar = async (e) => {
     e.preventDefault();
     if (selectedTags.length === 0) {
@@ -424,19 +455,12 @@ export default function ManualBroadcast() {
     setIsSending(true);
     setMessage(null);
 
-    const formData = new FormData();
-    formData.append('asunto', asunto);
-    formData.append('cuerpo', htmlCorreo);
-    formData.append('formato', formato);
+    const formData = datosDelCorreo();
     // Los bloques del editor quedan guardados para poder reutilizar el diseño después
     if (esCampana) formData.append('diseno', JSON.stringify({ bloques, estilos }));
-    if (remitente) formData.append('remitente_id', remitente.id);
-    if (remitenteNombre.trim()) formData.append('remitente_nombre', remitenteNombre.trim());
     formData.append('etiqueta', selectedTags.join(','));
     // Si queda vacío, el servidor arma "Campaña Etiquetas ... Fase ..."
     if (nombreCampana.trim()) formData.append('nombre_provisional', nombreCampana.trim());
-
-    archivos.forEach(archivo => formData.append('adjuntos[]', archivo));
 
     try {
       await api.post('/campaign/manual', formData, {
@@ -759,6 +783,10 @@ export default function ManualBroadcast() {
               >
                 {isSending ? <><Loader2 size={17} className="animate-spin" /> Encolando...</> : <><Send size={17} /> Enviar campaña</>}
               </button>
+              <button type="button" onClick={abrirPrueba} disabled={isSending} className={`${ui.btn} w-full`}
+                title="Envía este correo solo a quien tú escribas, para revisarlo antes de la campaña">
+                <FlaskConical size={16} /> Enviar correo de prueba
+              </button>
               <p className="text-center text-xs text-slate-500 min-h-4">
                 {borradorFallo ? 'No se pudo guardar el borrador: las imágenes no caben en este navegador' : guardadoA ? `Borrador guardado a las ${formatHora(guardadoA)}` : 'El borrador se guarda solo en este navegador'}
               </p>
@@ -771,6 +799,7 @@ export default function ManualBroadcast() {
         <EmailDesigner bloques={bloques} estilos={estilos} onChange={guardarDiseno} onClose={cerrarEditor} />
       )}
       <SenderManager isOpen={remitentesOpen} onClose={cerrarRemitentes} remitentes={remitentes || []} onCambio={cargarRemitentes} />
+      <TestEmailModal isOpen={pruebaOpen} onClose={cerrarPrueba} asunto={asunto} onEnviar={enviarPrueba} />
       <ReuseCampaignModal isOpen={reusarOpen} onClose={cerrarReusar} cargando={reusando} onElegir={(c) => reutilizarCampana(c.nombre)} />
     </div>
   );
