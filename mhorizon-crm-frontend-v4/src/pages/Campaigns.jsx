@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Search, ArrowUpDown, RefreshCw, GitCompare, X, Download, ChevronRight, Pencil } from 'lucide-react';
+import { Search, ArrowUpDown, RefreshCw, GitCompare, X, Download, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import Select from '../components/Select';
 import PageHeader from '../components/PageHeader';
@@ -12,7 +12,7 @@ import { LegendDot, Panel, RateBar, Stat, StatGrid } from '../components/analyti
 import { downloadCsv } from '../utils/csv';
 import { toDayKey } from '../utils/dates';
 import { COLORS, axisTick, tooltipStyle, ui } from '../utils/theme';
-import { notifyError, promptText } from '../utils/notify';
+import { confirmAction, notifyError, notifySuccess, promptText } from '../utils/notify';
 import { useDashboardMetrics } from '../hooks/useDashboardMetrics';
 
 const ITEMS_PER_PAGE = 20;
@@ -60,7 +60,8 @@ const sortValue = (camp, key) => {
 
 export default function Campaigns() {
   const navigate = useNavigate();
-  const { loading, error, fetchData, campaignsSummary: rawSummary, saveCampaignAlias } = useDashboardMetrics();
+  const { loading, error, fetchData, campaignsSummary: rawSummary, saveCampaignAlias, deleteCampaigns } = useDashboardMetrics();
+  const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState({ key: 'lastDate', dir: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
@@ -80,7 +81,7 @@ export default function Campaigns() {
 
   const editAlias = async (camp) => {
     const alias = await promptText({
-      title: 'Nombre provisional', text: `Asunto: ${camp.name}. Déjalo vacío para quitarlo.`,
+      title: 'Nombre provisional', text: `Asunto: ${camp.asunto}. Déjalo vacío para quitarlo.`,
       placeholder: 'Ej. Promo noviembre', initialValue: camp.alias, allowEmpty: true,
     });
     if (alias === null || alias === camp.alias) return;
@@ -116,9 +117,33 @@ export default function Campaigns() {
     setCurrentPage(1);
   };
 
-  const toggleSelected = (name) => setSelected(prev =>
-    prev.includes(name) ? prev.filter(n => n !== name) : prev.length < MAX_COMPARE ? [...prev, name] : prev);
+  // Se pueden marcar todas las que quieras (para borrarlas); comparar admite hasta MAX_COMPARE
+  const toggleSelected = (name) => setSelected(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
   const compared = campaignsSummary.filter(c => selected.includes(c.name));
+  const canCompare = selected.length >= 2 && selected.length <= MAX_COMPARE;
+
+  const handleDelete = async () => {
+    const names = [...selected];
+    const many = names.length > 1;
+    const label = many ? `${names.length} campañas` : `"${compared[0]?.displayName || names[0]}"`;
+    const ok = await confirmAction({
+      title: many ? `¿Eliminar ${names.length} campañas?` : '¿Eliminar campaña?',
+      text: `Se borrarán ${label} con sus envíos, aperturas, clics y rebotes registrados. Los prospectos no se eliminan. No se puede deshacer.`,
+      confirmText: 'Sí, eliminar', danger: true,
+    });
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await deleteCampaigns(names);
+      setSelected([]);
+      notifySuccess(many ? `Se eliminaron ${names.length} campañas.` : 'La campaña se eliminó.');
+    } catch (err) {
+      console.error('Error eliminando campañas: ', err);
+      notifyError(err?.response?.data?.message || 'No se pudieron eliminar las campañas.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // La columna de rebotes solo aparecen cuando el servidor ya envía esos datos
   const hasDelivery = campaignsSummary.some(c => c.bounces > 0);
@@ -138,7 +163,7 @@ export default function Campaigns() {
 
   return (
     <div className="space-y-5">
-      <PageHeader description="Todos tus envíos con sus resultados. Pulsa una campaña para ver su reporte, o márcala y usa «Cambiar nombre» para ponerle un nombre provisional."
+      <PageHeader description="Todos tus envíos con sus resultados. Pulsa una campaña para ver su reporte, o márcalas para cambiarles el nombre, compararlas o eliminarlas."
         actions={<>
           <button onClick={fetchData} disabled={loading} title="Actualizar datos" aria-label="Actualizar datos" className={ui.iconBtn}>
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -147,9 +172,14 @@ export default function Campaigns() {
             title={selected.length !== 1 ? 'Marca una campaña en la tabla para cambiarle el nombre' : 'Cambiar el nombre provisional de la campaña marcada'} className={ui.btn}>
             <Pencil size={16} /> Cambiar nombre
           </button>
-          <button onClick={() => setCompareOpen(true)} disabled={selected.length < 2}
-            title={selected.length < 2 ? 'Marca al menos 2 campañas en la tabla' : 'Comparar las campañas marcadas'} className={ui.btn}>
+          <button onClick={() => setCompareOpen(true)} disabled={!canCompare}
+            title={selected.length < 2 ? 'Marca al menos 2 campañas en la tabla' : selected.length > MAX_COMPARE ? `Se pueden comparar hasta ${MAX_COMPARE} campañas` : 'Comparar las campañas marcadas'} className={ui.btn}>
             <GitCompare size={16} /> Comparar{selected.length > 0 ? ` (${selected.length})` : ''}
+          </button>
+          <button onClick={handleDelete} disabled={selected.length === 0 || deleting}
+            title={selected.length === 0 ? 'Marca las campañas que quieres eliminar' : 'Eliminar las campañas marcadas'}
+            className={`${ui.btn} hover:text-rose-600 hover:border-rose-200`}>
+            <Trash2 size={16} /> Eliminar{selected.length > 0 ? ` (${selected.length})` : ''}
           </button>
           <button onClick={exportCsv} disabled={rows.length === 0} title="Descargar la tabla" className={ui.btn}>
             <Download size={16} /> Exportar CSV
@@ -214,7 +244,7 @@ export default function Campaigns() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="bg-slate-50/60 border-b border-slate-100">
-                <th className="py-3 pl-5 w-8"><span className="sr-only">Comparar</span></th>
+                <th className="py-3 pl-5 w-8"><span className="sr-only">Marcar</span></th>
                 {columns.map(col => (
                   <th key={col.key} className={ui.th} aria-sort={sort.key === col.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
                     <button onClick={() => toggleSort(col.key)} className="inline-flex items-center gap-1 cursor-pointer hover:text-slate-900">
@@ -229,8 +259,8 @@ export default function Campaigns() {
               {pageRows.map(camp => (
                 <tr key={camp.name} onClick={() => openReport(camp.name)} className={`group border-t border-slate-100 first:border-t-0 cursor-pointer transition-colors hover:bg-slate-50 ${selected.includes(camp.name) ? 'bg-brand-50/50' : ''}`}>
                   <td className="py-3 pl-5" onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" aria-label={`Comparar ${camp.name}`} checked={selected.includes(camp.name)} onChange={() => toggleSelected(camp.name)}
-                      disabled={!selected.includes(camp.name) && selected.length >= MAX_COMPARE} className="h-4 w-4 rounded accent-brand-600 cursor-pointer disabled:cursor-not-allowed" />
+                    <input type="checkbox" aria-label={`Marcar ${camp.name}`} checked={selected.includes(camp.name)} onChange={() => toggleSelected(camp.name)}
+                      className="h-4 w-4 rounded accent-brand-600 cursor-pointer" />
                   </td>
                   <td className="py-3 px-5 min-w-48">
                     <span className="inline-flex items-center gap-1.5">

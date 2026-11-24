@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UploadCloud, Search, Tag, X, Trash2, ArrowUpDown, Download, LogIn, LogOut, PencilLine } from 'lucide-react';
+import { UploadCloud, Search, Tag, Tags, X, Trash2, ArrowUpDown, Download, LogIn, LogOut, PencilLine } from 'lucide-react';
 import api from '../api/api';
 import Modal from '../components/Modal';
 import ContactDrawer from '../components/ContactDrawer';
@@ -95,6 +95,18 @@ export default function Audience() {
 
   const closeTagModal = () => { setModalTag(EMPTY_TAG_MODAL); setNuevaEtiqueta(''); };
 
+  // Quitar etiquetas a varios prospectos a la vez
+  const [modalQuitar, setModalQuitar] = useState(EMPTY_TAG_MODAL);
+  const [etiquetasQuitar, setEtiquetasQuitar] = useState([]);
+  const closeQuitarModal = () => { setModalQuitar(EMPTY_TAG_MODAL); setEtiquetasQuitar([]); };
+  // Etiquetas que tienen los prospectos marcados, con cuántos la tienen
+  const etiquetasDeSeleccion = useMemo(() => {
+    const conteo = new Map();
+    const elegidos = new Set(modalQuitar.emails);
+    leads.forEach(l => { if (elegidos.has(l.email)) parseTags(l.etiquetas).forEach(t => conteo.set(t, (conteo.get(t) || 0) + 1)); });
+    return [...conteo.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [leads, modalQuitar.emails]);
+
   const faseCounts = useMemo(() => {
     const counts = Object.fromEntries(FASES.map(f => [f, 0]));
     leads.forEach(l => { const f = Math.min(faseOf(l), 5); counts[f] = (counts[f] || 0) + 1; });
@@ -147,6 +159,9 @@ export default function Audience() {
   const toggleSort = (key) => setSort(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
   const toggleOne = (email) => setSelected(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email]);
   const togglePage = () => setSelected(prev => allPageSelected ? prev.filter(e => !pageEmails.includes(e)) : [...new Set([...prev, ...pageEmails])]);
+  const filteredEmails = leadsFiltrados.map(l => l.email);
+  const allFilteredSelected = filteredEmails.length > 0 && filteredEmails.every(e => selected.includes(e));
+  const selectAllFiltered = () => setSelected(prev => [...new Set([...prev, ...filteredEmails])]);
 
   const handleQuitarEtiqueta = async (email, etiquetaQuitar) => {
     try {
@@ -290,6 +305,21 @@ export default function Audience() {
     setWorking(false);
     if (failed) notifyError(`No se pudo etiquetar a ${failed} de ${emails.length} prospectos.`);
     else if (emails.length > 1) setSelected([]);
+  };
+
+  const handleQuitarEtiquetasMasivo = async (e) => {
+    e.preventDefault();
+    const { emails } = modalQuitar;
+    if (etiquetasQuitar.length === 0) return;
+    setWorking(true);
+    const results = await Promise.allSettled(etiquetasQuitar.map(etiqueta => api.post('/leads/etiquetas/remove-bulk', { emails, etiqueta })));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    const quitadas = etiquetasQuitar.length;
+    closeQuitarModal();
+    await fetchLeads();
+    setWorking(false);
+    if (failed) notifyError(`No se pudieron quitar ${failed} de ${quitadas} etiquetas.`);
+    else notifySuccess(`Se quitó ${quitadas === 1 ? 'la etiqueta' : `${quitadas} etiquetas`} de ${emails.length} prospecto${emails.length > 1 ? 's' : ''}.`);
   };
 
   const exportCsv = () => downloadCsv(`prospectos-${toDayKey(new Date())}.csv`, [
@@ -451,7 +481,11 @@ export default function Audience() {
         {selected.length > 0 && (
           <div className="px-4 py-2.5 bg-navy-900 text-white flex flex-wrap items-center gap-3 text-sm animate-slide-down">
             <span className="font-bold">{selected.length} seleccionado{selected.length > 1 ? 's' : ''}</span>
+            {!allFilteredSelected && filteredEmails.length > selected.length && (
+              <button onClick={selectAllFiltered} className="text-slate-300 hover:text-white underline underline-offset-2 font-semibold cursor-pointer">Seleccionar los {filteredEmails.length} filtrados</button>
+            )}
             <button disabled={working} onClick={() => setModalTag({ isOpen: true, emails: selected })} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/10 hover:bg-white/20 font-semibold cursor-pointer disabled:opacity-50"><Tag size={14} /> Etiquetar</button>
+            <button disabled={working} onClick={() => setModalQuitar({ isOpen: true, emails: selected })} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/10 hover:bg-white/20 font-semibold cursor-pointer disabled:opacity-50"><Tags size={14} /> Quitar etiquetas</button>
             <button disabled={working} onClick={() => handleCambiarFlujo(selected, true)} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/10 hover:bg-white/20 font-semibold cursor-pointer disabled:opacity-50"><LogIn size={14} /> Pasar a fases</button>
             <button disabled={working} onClick={() => handleCambiarFlujo(selected, false)} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/10 hover:bg-white/20 font-semibold cursor-pointer disabled:opacity-50"><LogOut size={14} /> Sacar de fases</button>
             <button disabled={working} onClick={() => handleEliminar(selected)} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-rose-500/20 text-rose-200 hover:bg-rose-500/30 font-semibold cursor-pointer disabled:opacity-50"><Trash2 size={14} /> Eliminar</button>
@@ -555,6 +589,37 @@ export default function Audience() {
         flag={openLead ? deliveryFlag(openLead.email, delivery) : null} onSaveContact={handleGuardarContacto}
         onAddTag={(email) => setModalTag({ isOpen: true, emails: [email] })} onRemoveTag={handleQuitarEtiqueta}
         onDelete={async (emails) => { await handleEliminar(emails); }} />
+
+      <Modal isOpen={modalQuitar.isOpen} onClose={closeQuitarModal} className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-base font-semibold text-slate-900">Quitar etiquetas</h3>
+          <button onClick={closeQuitarModal} aria-label="Cerrar" className="text-slate-400 hover:text-slate-800 cursor-pointer"><X size={20} /></button>
+        </div>
+        <p className="text-sm text-slate-600 mb-4">
+          Marca las etiquetas que quieres quitar a <span className="font-bold">{modalQuitar.emails.length} prospecto{modalQuitar.emails.length > 1 ? 's' : ''}</span>.
+        </p>
+        {etiquetasDeSeleccion.length === 0 ? (
+          <p className="text-sm text-slate-500 mb-2">Los prospectos marcados no tienen etiquetas.</p>
+        ) : (
+          <form onSubmit={handleQuitarEtiquetasMasivo}>
+            <ul className="max-h-64 overflow-y-auto divide-y divide-slate-100 rounded-lg border border-slate-200 mb-4">
+              {etiquetasDeSeleccion.map(([tag, count]) => (
+                <li key={tag}>
+                  <label className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">
+                    <input type="checkbox" checked={etiquetasQuitar.includes(tag)} className="h-4 w-4 rounded accent-brand-600"
+                      onChange={() => setEtiquetasQuitar(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])} />
+                    <span className="flex-1 font-medium text-slate-800">{tag}</span>
+                    <span className="text-xs text-slate-500 tabular-nums">{count} de {modalQuitar.emails.length}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <button type="submit" disabled={etiquetasQuitar.length === 0 || working} className={`${ui.btnPrimary} w-full`}>
+              {working ? 'Quitando...' : etiquetasQuitar.length > 1 ? `Quitar ${etiquetasQuitar.length} etiquetas` : 'Quitar etiqueta'}
+            </button>
+          </form>
+        )}
+      </Modal>
 
       <Modal isOpen={modalTag.isOpen} onClose={closeTagModal} className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm">
         <div className="flex justify-between items-center mb-4">

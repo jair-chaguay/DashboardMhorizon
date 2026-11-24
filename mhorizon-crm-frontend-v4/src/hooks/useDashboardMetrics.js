@@ -37,7 +37,7 @@ function countEventsByEmail(logs) {
 }
 
 export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos') => {
-  const [data, setData] = useState({ leads: [], linkClicks: [], emailLogs: [], campaignAliases: {}, campaignTypes: null });
+  const [data, setData] = useState({ leads: [], linkClicks: [], emailLogs: [], campaignAliases: {}, campaignTypes: null, campaignSubjects: {} });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [campaignSearch, setCampaignSearch] = useState(initialCampaign);
@@ -58,7 +58,9 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
         campaignAliases: res?.campaign_aliases || {},
         // Campañas de Difusión manual ({ asunto: 'personal' | 'campana' }); las demás son de la secuencia de la IA.
         // null si el servidor aún no lo envía
-        campaignTypes: res?.campaign_types || null
+        campaignTypes: res?.campaign_types || null,
+        // Asunto real de cada difusión: el nombre de la campaña puede llevar "(2)" si se repitió el asunto
+        campaignSubjects: res?.campaign_subjects || {}
       });
     } catch (err) {
       console.error("Error conectando a Laravel: ", err);
@@ -285,7 +287,7 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
       const clickRate = delivered > 0 ? ((camp.uniqueClicks.size / delivered) * 100).toFixed(1) : 0;
       const ctor = camp.uniqueOpens.size > 0 ? ((camp.uniqueClicks.size / camp.uniqueOpens.size) * 100).toFixed(1) : 0;
       return {
-        ...camp, alias: data.campaignAliases[camp.name] || '', openRate,
+        ...camp, subject: data.campaignSubjects[camp.name] || camp.subject, alias: data.campaignAliases[camp.name] || '', openRate,
         tipo: data.campaignTypes ? (data.campaignTypes[camp.name] ? 'manual' : 'ia') : null, formato: data.campaignTypes?.[camp.name] || null, clickRate, ctor, dateStr: formatDateTime(camp.lastDate),
         delivered, bounces: d.bounces, hardBounces: d.hard.size + d.unknown.size, softBounces: d.soft.size, hasBounceTypes: d.hasBounceTypes,
         unsubscribed: d.unsub.size, spam: d.spam.size,
@@ -293,7 +295,7 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
         replies: [...camp.recipients].filter(e => isReplied(leadByEmail.get(e)?.status)).length,
       };
     }).sort((a, b) => (b.lastDate?.getTime() || 0) - (a.lastDate?.getTime() || 0));
-  }, [data.emailLogs, data.leads, data.campaignAliases, data.campaignTypes]);
+  }, [data.emailLogs, data.leads, data.campaignAliases, data.campaignTypes, data.campaignSubjects]);
 
   // Nombre provisional de una campaña (vacío lo quita). campaign_name no cambia
   const saveCampaignAlias = useCallback(async (name, alias) => {
@@ -305,6 +307,13 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
       return { ...prev, campaignAliases };
     });
   }, []);
+
+  // Borra campañas (sus registros y su nombre provisional) y recarga los datos
+  const deleteCampaigns = useCallback(async (names) => {
+    const { data: res } = await api.post('/campaign/eliminar', { nombres: names });
+    await fetchData();
+    return res;
+  }, [fetchData]);
 
   const openDetails = useCallback((type) => {
     const affectedEmails = new Set();
@@ -387,7 +396,7 @@ export const useDashboardMetrics = (initialCampaign = '', initialPeriod = 'Todos
   return {
     leads: data.leads, loading, error, lastUpdated, fetchData, campaignSearch, setCampaignSearch, dateFilter, setDateFilter,
     uniqueCampaigns, filteredLogs, deliverability, isGlobalView, metrics, funnelData, crmFunnelData, linkInsights, deviceBreakdown,
-    timeSeriesData, hourlyActivityData, campaignsSummary, saveCampaignAlias, hotLeads, recentEvents,
+    timeSeriesData, hourlyActivityData, campaignsSummary, saveCampaignAlias, deleteCampaigns, hotLeads, recentEvents,
     modalDetails, openDetails, closeDetails
   };
 };

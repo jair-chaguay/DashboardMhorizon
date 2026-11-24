@@ -59,7 +59,7 @@ export default function ReuseCampaignModal({ isOpen, onClose, onElegir, cargando
                   <span className="mt-0.5 h-8 w-8 shrink-0 grid place-items-center rounded-md bg-slate-100 text-slate-500"><Icon size={15} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-slate-900">{c.alias || c.nombre}</span>
-                    <span className="block truncate text-xs text-slate-500">Asunto: {c.nombre}</span>
+                    <span className="block truncate text-xs text-slate-500">Asunto: {c.asunto || c.nombre}</span>
                     <span className="block text-xs text-slate-400 mt-0.5">
                       {c.formato === 'campana' ? 'Campaña con diseño' : 'Correo personal'}{fecha ? ` · ${formatFechaHora(fecha)}` : ''}
                       {!c.reutilizable && ' · se envió antes de guardar los diseños'}
